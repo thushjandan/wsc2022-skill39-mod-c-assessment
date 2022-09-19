@@ -1,0 +1,173 @@
+---
+- name: MARKING - Linux
+  hosts: linux
+  any_errors_fatal: false
+  tasks:
+    ## Linux: Hostname
+    - name: "Linux: Hostname"
+      debug:
+        var: ansible_hostname
+      tags:
+        - c1_1
+      
+    - name: Assert Hostname
+      assert:
+        that: "hostname == ansible_hostname"
+        success_msg: Hostname is correctly configured
+        fail_msg: "Hostname doesn't match. Configured: {{ ansible_hostname }}. Expected: {{ hostname }}"
+        quiet: true
+      ignore_errors: true
+      tags:
+        - c1_1
+
+    - pause:
+        prompt: "Please mark now aspect - Linux: Hostname"
+      tags:
+        - c1_1
+
+    ## iptables: Packet filtering
+    - name: "Get iptables rules"
+      shell: "iptables -L -n -v ; printf ' \n \n \n'"
+      ignore_errors: true
+      register: out_packet_filtering
+      tags:
+        - c1_2
+
+    - name: "iptables: Packet filtering"
+      debug:
+        var: out_packet_filtering.stdout
+      tags:
+        - c1_2
+
+    - pause:
+        prompt: "Please mark now aspect - iptables: Packet filtering"
+      tags:
+        - c1_2
+
+    ## iptables: Rules persist across reboots
+    # - name: Reboot LIN4
+    #   reboot:
+    #   when: 'inventory_hostname == "LIN4"'
+      # tags:
+      #   - c1_3
+    
+    # - name: "Get iptables rules of LIN4"
+    #   shell: "iptables -L -n -v ; printf ' \n \n \n'"
+    #   register: out_packet_filtering_lin4
+    #   when: 'inventory_hostname == "LIN4"'
+      # tags:
+      #   - c1_3
+
+    # - name: "iptables: Rules persist across reboots"
+    #   debug:
+    #     var: out_packet_filtering_lin4.stdout
+    #   when: 'inventory_hostname == "LIN4"'
+      # tags:
+      #   - c1_3
+
+    # - pause:
+    #     prompt: "Please mark now aspect - iptables: Rules persist across reboots"
+      # tags:
+      #   - c1_3
+    
+    ## DNS: Primary/Master DNS server
+    - name: "Try zone transfer from primary"
+      shell: "dig @10.22.0.2 applix.com AXFR +noall +comments +timeout=2 +tries=1"
+      register: dns_primary_transfer
+      when: 
+        - "'dns' in group_names"
+        - "inventory_hostname != groups.dns[0]"
+      tags:
+        - c1_4
+
+    - name: "DNS: Primary/Master DNS server"
+      debug:
+        var: dns_primary_transfer.stdout
+      when: 
+        - "'dns' in group_names"
+        - "inventory_hostname != groups.dns[0]"
+      tags:
+        - c1_4
+    - pause:
+        prompt: "Please mark now aspect - DNS: Primary/Master DNS server"
+      tags:
+        - c1_4
+
+    ## DNS: Secondary/Slave DNS servers
+    - name: "Try zone transfer from secondary"
+      shell: "! dig @10.22.0.5 applix.com AXFR +timeout=2 +tries=1"
+      register: dns_secondary_transfer
+      when: 
+        - "'dns' in group_names"
+        - "inventory_hostname != (groups.dns|last)"
+      ignore_errors: true
+      tags:
+        - c1_4
+    
+    - name: "Execute dig towards secondary"
+      shell: "dig @{{ hostvars[item]['ansible_host'] }} applix.com SOA +noall +comments"
+      register: dns_secondary_dig
+      loop: "{{ (groups.dns[1:]|list) }}"
+      loop_control:
+        label: "{{ item }}"
+      delegate_to: localhost
+      run_once: true
+      ignore_errors: true
+      tags:
+        - c1_4
+
+    - name: "DNS: Secondary/Slave DNS servers - No zone transfers between slaves allowed"
+      debug:
+        var: dns_secondary_transfer.stdout
+      when: 
+        - "'dns' in group_names"
+        - "inventory_hostname != (groups.dns|last)"
+      tags:
+        - c1_4
+
+    - name: "DNS: Secondary/Slave DNS servers - Slaves answer DNS queries"
+      debug:
+        msg: "{{ item.stdout }}"
+      delegate_to: localhost
+      loop: "{{ dns_secondary_dig.results }}"
+      loop_control:
+        label: "{{ item.cmd }}"
+      run_once: true
+      tags:
+        - c1_4
+    - pause:
+        prompt: "Please mark now aspect - Secondary/Slave DNS servers"
+      tags:
+        - c1_4
+    
+    ## DNS: A records in zone applix.com
+    - name: "Resolve all DNS entries from hosts file"
+      shell: "dig @10.22.0.2 {{ hostvars[item]['hostname'] }}.applix.com +noall +answer"
+      register: dns_a_entries
+      run_once: true
+      delegate_to: localhost
+      loop: "{{ groups.all }}"
+      ignore_errors: true
+      tags:
+        - c1_5
+
+    - name: Assert DNS A records
+      assert:
+        that: "{{ item.stdout.split('\t')|last == hostvars[item.item]['ansible_host'] }}"
+        success_msg: "A record for {{ hostvars[item.item]['hostname'] }}.applix.com is correctly configured"
+        fail_msg: "A record for {{ hostvars[item.item]['hostname'] }}.applix.com doesn't match. Configured: {{ item.stdout.split('\t')|last }}. Expected: {{ hostvars[item.item]['ansible_host'] }}"
+        quiet: true
+      ignore_errors: true
+      delegate_to: localhost
+      loop: "{{ dns_a_entries.results }}"
+      loop_control:
+        label: "{{ item.cmd }}"
+      run_once: true
+      tags:
+        - c1_5
+    - pause:
+        prompt: "Please mark now aspect - A records in zone applix.com"
+      tags:
+        - c1_5
+
+      
