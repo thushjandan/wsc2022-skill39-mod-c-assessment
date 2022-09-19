@@ -1,12 +1,14 @@
 ---
 - name: MARKING - Linux
-  hosts: linux
+  hosts: linux,localhost
   any_errors_fatal: false
   tasks:
     ## Linux: Hostname
     - name: "Linux: Hostname"
       debug:
         var: ansible_hostname
+      when: 
+        - "'linux' in group_names"
       tags:
         - c1_1
       
@@ -17,6 +19,8 @@
         fail_msg: "Hostname doesn't match. Configured: {{ ansible_hostname }}. Expected: {{ hostname }}"
         quiet: true
       ignore_errors: true
+      when: 
+        - "'linux' in group_names"
       tags:
         - c1_1
 
@@ -30,12 +34,16 @@
       shell: "iptables -L -n -v ; printf ' \n \n \n'"
       ignore_errors: true
       register: out_packet_filtering
+      when: 
+        - "'linux' in group_names"
       tags:
         - c1_2
 
     - name: "iptables: Packet filtering"
       debug:
         var: out_packet_filtering.stdout
+      when: 
+        - "'linux' in group_names"
       tags:
         - c1_2
 
@@ -151,7 +159,7 @@
       tags:
         - c1_5
 
-    - name: Assert DNS A records
+    - name: "DNS: A records in zone applix.com"
       assert:
         that: "{{ item.stdout.split('\t')|last == hostvars[item.item]['ansible_host'] }}"
         success_msg: "A record for {{ hostvars[item.item]['hostname'] }}.applix.com is correctly configured"
@@ -170,4 +178,90 @@
       tags:
         - c1_5
 
+    ## DNS: intranet.applix.com resolves to 10.22.0.51
+    - name: "Resolve intranet.applix.com"
+      shell: "dig @10.22.0.2 intranet.applix.com +noall +answer"
+      register: dns_intranet_a_entry
+      run_once: true
+      delegate_to: localhost
+      ignore_errors: true
+      tags:
+        - c1_6
       
+    - name: "DNS: intranet.applix.com resolves to 10.22.0.51"
+      assert:
+        that: "{{ dns_intranet_a_entry.stdout.split('\t')|last == '10.22.0.51' }}"
+        success_msg: "intranet.applix.com resolves correctly to 10.22.0.51"
+        fail_msg: "intranet.applix.com doesn't resolve correctly. Currently resolves to: {{ dns_intranet_a_entry.stdout.split('\t')|last }}. Expected: 10.22.0.51"
+        quiet: true
+      ignore_errors: true
+      delegate_to: localhost
+      run_once: true
+      tags:
+        - c1_6
+    - pause:
+        prompt: "Please mark now aspect - intranet.applix.com resolves to 10.22.0.51"
+      tags:
+        - c1_6
+    
+    ## DNS: DNS server configured on Linux servers
+    - name: "Check primary nameserver configured on linux hosts"
+      shell: "dig applix.com SOA +noall +stats | grep SERVER"
+      register: dns_client_primary
+      ignore_errors: true
+      tags:
+        - c1_7
+
+    - name: "Check backup nameserver configured on linux hosts"
+      shell: "cat /etc/resolv.conf | grep nameserver"
+      register: dns_client_secondaries
+      ignore_errors: true
+      tags:
+        - c1_7
+
+    - name: "DNS: DNS server configured on Linux servers - Check if primary nameserver is configured"
+      assert:
+        that: "{{ '10.22.0.2' in dns_client_primary.stdout }}"
+        success_msg: "10.22.0.2 is correctly configured as primary nameserver"
+        fail_msg: "10.22.0.2 is not the primary server for {{ inventory_hostname }}. Configured: {{ dns_client_primary.stdout.split('#')|first }}. Expected: 10.22.0.2"
+        quiet: true
+      ignore_errors: true
+      tags:
+        - c1_7
+
+    - name: "DNS: DNS server configured on Linux servers - Check if backup nameservers are configured"
+      assert:
+        that:
+          - "{{ '10.22.0.3' in dns_client_secondaries.stdout }}"
+          - "{{ '10.22.0.4' in dns_client_secondaries.stdout }}"
+          - "{{ '10.22.0.5' in dns_client_secondaries.stdout }}"
+        success_msg: "10.22.0.3, 10.22.0.4 & 10.22.0.5 are correctly configured as backup nameserver"
+        fail_msg: "Not all backup nameserver are configured for {{ inventory_hostname }}. Configured:\n{{ dns_client_secondaries.stdout }}\nExpected: 10.22.0.3, 10.22.0.4 & 10.22.0.5"
+        quiet: true
+      ignore_errors: true
+      tags:
+        - c1_7
+
+    - pause:
+        prompt: "Please mark now aspect - DNS server configured on Linux servers"
+      tags:
+        - c1_7
+
+    ## DNS: DNS suffix applix.com is configured
+    - name: "Check name suffix on linux hosts"
+      shell: "cat /etc/resolv.conf | { grep -E 'search|domain' || true; }"
+      register: dns_client_suffix
+      ignore_errors: true
+      tags:
+        - c1_8
+
+    - name: "DNS: DNS suffix applix.com is configured"
+      assert:
+        that:
+          - "{{ 'applix.com' in (dns_client_suffix.stdout|lower) }}"
+        success_msg: "applix.com is correctly configured as DNS suffix"
+        fail_msg: "DNS suffix is not correctly configured for {{ inventory_hostname }}. Configured: {{ dns_client_suffix.stdout }}. Expected: applix.com"
+        quiet: true
+      ignore_errors: true
+      tags:
+        - c1_8
