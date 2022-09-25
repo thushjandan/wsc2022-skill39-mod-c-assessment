@@ -33,6 +33,7 @@
     - name: "Get iptables rules"
       shell: "iptables -L -n -v ; printf ' \n \n \n'"
       ignore_errors: true
+      changed_when: False
       register: out_packet_filtering
       when: 
         - "'linux' in group_names"
@@ -52,31 +53,33 @@
       tags:
         - c1_2
 
-    ## iptables: Rules persist across reboots
-    # - name: Reboot LIN4
-    #   reboot:
-    #   when: 'inventory_hostname == "LIN4"'
-      # tags:
-      #   - c1_3
+    # iptables: Rules persist across reboots
+    - name: Reboot LIN4
+      reboot:
+      when: 'inventory_hostname == "LIN4"'
+      changed_when: False
+      tags:
+        - c1_3
     
-    # - name: "Get iptables rules of LIN4"
-    #   shell: "iptables -L -n -v ; printf ' \n \n \n'"
-    #   register: out_packet_filtering_lin4
-    #   when: 'inventory_hostname == "LIN4"'
-      # tags:
-      #   - c1_3
+    - name: "Get iptables rules of LIN4"
+      shell: "iptables -L -n -v ; printf ' \n \n \n'"
+      register: out_packet_filtering_lin4
+      when: 'inventory_hostname == "LIN4"'
+      changed_when: False
+      tags:
+        - c1_3
 
-    # - name: "iptables: Rules persist across reboots"
-    #   debug:
-    #     var: out_packet_filtering_lin4.stdout
-    #   when: 'inventory_hostname == "LIN4"'
-      # tags:
-      #   - c1_3
+    - name: "iptables: Rules persist across reboots"
+      debug:
+        var: out_packet_filtering_lin4.stdout
+      when: 'inventory_hostname == "LIN4"'
+      tags:
+        - c1_3
 
-    # - pause:
-    #     prompt: "Please mark now aspect - iptables: Rules persist across reboots"
-      # tags:
-      #   - c1_3
+    - pause:
+        prompt: "Please mark now aspect - iptables: Rules persist across reboots"
+      tags:
+        - c1_3
     
     ## DNS: Primary/Master DNS server
     - name: "Try zone transfer from primary"
@@ -85,6 +88,7 @@
       when: 
         - "'dns' in group_names"
         - "inventory_hostname != groups.dns[0]"
+      changed_when: False
       tags:
         - c1_4
 
@@ -109,6 +113,7 @@
         - "'dns' in group_names"
         - "inventory_hostname != (groups.dns|last)"
       ignore_errors: true
+      changed_when: False
       tags:
         - c1_4
     
@@ -121,6 +126,7 @@
       delegate_to: localhost
       run_once: true
       ignore_errors: true
+      changed_when: False
       tags:
         - c1_4
 
@@ -156,6 +162,7 @@
       delegate_to: localhost
       loop: "{{ groups.all }}"
       ignore_errors: true
+      changed_when: False
       tags:
         - c1_5
 
@@ -185,6 +192,7 @@
       run_once: true
       delegate_to: localhost
       ignore_errors: true
+      changed_when: False
       tags:
         - c1_6
       
@@ -209,6 +217,7 @@
       shell: "dig applix.com SOA +noall +stats | grep SERVER"
       register: dns_client_primary
       ignore_errors: true
+      changed_when: False
       tags:
         - c1_7
 
@@ -216,6 +225,7 @@
       shell: "cat /etc/resolv.conf | grep nameserver"
       register: dns_client_secondaries
       ignore_errors: true
+      changed_when: False
       tags:
         - c1_7
 
@@ -252,6 +262,7 @@
       shell: "cat /etc/resolv.conf | { grep -E 'search|domain' || true; }"
       register: dns_client_suffix
       ignore_errors: true
+      changed_when: False
       tags:
         - c1_8
 
@@ -265,3 +276,274 @@
       ignore_errors: true
       tags:
         - c1_8
+
+    - pause:
+        prompt: "Please mark now aspect - DNS server configured on Linux servers"
+      tags:
+        - c1_8
+    
+    ## Web: Webserver listen on port defined in the variable webport
+    - name: "Test if webserver listening on webport"
+      ansible.builtin.uri:
+        url: "http://{{ hostvars[inventory_hostname]['ansible_host'] }}:{{ webport }}"
+        return_content: yes
+      register: web_server_listen
+      when: "inventory_hostname in groups.web"
+      ignore_errors: true
+      changed_when: False
+      delegate_to: localhost
+      tags:
+        - c1_9
+        - c1_10
+
+    - name: "Web: Webserver listen on port defined in the variable webport"
+      assert:
+        that:
+          - "'Hello from {}!'.format(hostname) in (web_server_listen.content)"
+        success_msg: "Webserver are listening on port  {{ webport }} and contain their hostname in the response"
+        fail_msg: "The response of the webserver does not contain 'Hello from {{ hostname }}'! Returned content: {{ web_server_listen.content }}"
+        quiet: true
+      ignore_errors: true
+      when: "inventory_hostname in groups.web"
+      tags:
+        - c1_9
+
+    - pause:
+        prompt: "Please mark now aspect - Web: Webserver listen on port defined in the variable webport"
+      tags:
+        - c1_9
+
+    - name: "Web: Textcolor is used"
+      assert:
+        that:
+          - "webcolor|lower in (web_server_listen.content|lower)"
+        success_msg: "The correct webcolor is used"
+        fail_msg: "The webcolor is not set correctly. Expected color {{ webcolor }}! Returned content: {{ web_server_listen.content }}"
+        quiet: true
+      ignore_errors: true
+      when: "inventory_hostname in groups.web"
+      tags:
+        - c1_10
+
+    - pause:
+        prompt: "Please mark now aspect - Web: Webserver listen on port defined in the variable webport"
+      tags:
+        - c1_10
+    
+    ## Web: http://intranet.applix.com is reachable
+    - name: "Test if intranet.applix.com is reachable"
+      ansible.builtin.uri:
+        url: "http://intranet.applix.com"
+        return_content: yes
+      register: web_intranet_listen
+      when: "inventory_hostname in groups.web"
+      ignore_errors: true
+      delegate_to: localhost
+      changed_when: False
+      tags:
+        - c1_11
+        - c1_15
+
+    - name: "Web: http://intranet.applix.com is reachable"
+      debug:
+        msg: "{{ web_intranet_listen.content }}"
+      when: "inventory_hostname in groups.web"
+      tags:
+        - c1_11
+
+    - pause:
+        prompt: "Please mark now aspect - Web: http://intranet.applix.com is reachable"
+      tags:
+        - c1_11
+
+    ## HA: VRRP master
+    - name: "Get keepalived.data"
+      shell: "kill -USR1 $(cat /var/run/keepalived.pid);cat /tmp/keepalived.data"
+      register: ha_keepalived_data
+      when: "inventory_hostname in groups.ha"
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c1_12
+        - c1_13
+        - c1_14
+
+    - name: "Test if VRRP state is set correctly on master"
+      assert:
+        that:
+          - "'Wantstate = MASTER' in ha_keepalived_data.stdout"
+        success_msg: "The VRRP master has been correctly set"
+        fail_msg: "The VRRP master is not set correctly. Expected Wantstate = MASTER. Returned content: {{ ha_keepalived_data.stdout | regex_findall('^.*Wantstate.*$', multiline=True) }}"
+        quiet: true
+      ignore_errors: true
+      when: "inventory_hostname == groups.ha|last"
+      tags:
+        - c1_12
+
+    - name: "Test if VRRP state is set correctly on backup"
+      assert:
+        that:
+          - "'Wantstate = BACKUP' in ha_keepalived_data.stdout"
+        success_msg: "The VRRP state for backup nodes has been correctly set"
+        fail_msg: "The VRRP state is not set correctly for backup nodes. Expected Wantstate = BACKUP. Returned content: {{ ha_keepalived_data.stdout | regex_findall('^.*Wantstate.*$', multiline=True) }}"
+        quiet: true
+      ignore_errors: true
+      when: "inventory_hostname in groups.ha[0:-1]"
+      tags:
+        - c1_12
+
+    - name: "HA: VRRP master"
+      debug:
+        msg: "{{ ha_keepalived_data.stdout | regex_findall('(^.*Wantstate.*$|^.*Priority.*$)', multiline=True) }}"
+      when: "inventory_hostname in groups.ha"
+      tags:
+        - c1_12
+
+    - pause:
+        prompt: "Please mark now aspect - HA: VRRP master"
+      tags:
+        - c1_12
+
+    ## HA: Floating IP is configured
+    - name: "Test if floating IP is configured"
+      assert:
+        that:
+          - "'10.22.0.51/24' in ha_keepalived_data.stdout"
+        success_msg: "The floating IP is correctly set"
+        fail_msg: "The floating IP is not set correctly. Expected 10.22.0.51/24. Returned content: {{ ha_keepalived_data.stdout | regex_findall('^.*dev\\seth0.*$', multiline=True)}}"
+        quiet: true
+      ignore_errors: true
+      when: "inventory_hostname in groups.ha"
+      tags:
+        - c1_13
+
+    - name: "HA: Floating IP is configured"
+      debug:
+        msg: "{{ ha_keepalived_data.stdout | regex_findall('^.*dev\\seth0.*$', multiline=True) }}"
+      when: "inventory_hostname in groups.ha"
+      tags:
+        - c1_13
+
+    - pause:
+        prompt: "Please mark now aspect - HA: Floating IP is configured"
+      tags:
+        - c1_13
+
+    ## HA: Keepalived is secured with password authentication
+    - name: "Test if password authentication is set"
+      assert:
+        that:
+          - "'Authentication type = SIMPLE_PASSWORD' in ha_keepalived_data.stdout"
+        success_msg: "Keepalived password authentication is correctly set"
+        fail_msg: "Keepalived password authentication is not set correctly. Expected Authentication type = SIMPLE_PASSWORD. Returned content: {{ ha_keepalived_data.stdout | regex_findall('^.*Authentication type.*$', multiline=True)}}"
+        quiet: true
+      ignore_errors: true
+      when: "inventory_hostname in groups.ha"
+      tags:
+        - c1_14
+
+    - name: "HA: Keepalived is secured with password authentication"
+      debug:
+        msg: "{{ ha_keepalived_data.stdout | regex_findall('^.*Authentication type.*$', multiline=True) }}"
+      when: "inventory_hostname in groups.ha"
+      tags:
+        - c1_14
+
+    - pause:
+        prompt: "Please mark now aspect - HA: Keepalived is secured with password authentication"
+      tags:
+        - c1_14
+
+    ## HA: X-HAPROXY-HOST HTTP header (case insensitive)
+    - name: "Get intranet.applix.com"
+      shell:
+        cmd: "curl -v http://intranet.applix.com 2>&1 | grep -i haproxy"
+        warn: False
+      register: web_intranet_header
+      when: "inventory_hostname in groups.web"
+      delegate_to: localhost
+      run_once: true
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c1_15
+
+    - name: "Test if HAPROXY header is set"
+      assert:
+        that:
+          - "'x_haproxy_host' in web_intranet_listen"
+          - "web_intranet_listen.x_haproxy_host|upper == 'APPLIX-LINUXHOST-002'"
+        success_msg: "X-HAPROXY-HOST Header is correctly set"
+        fail_msg: "X-HAPROXY-HOST header is not set correctly. Expected x-haproxy-host: APPLIX-LINUXHOST-002. Returned content: {{ web_intranet_listen.x_haproxy_host }}"
+        quiet: true
+      ignore_errors: true
+      when: "inventory_hostname in groups.web"
+      run_once: true
+      tags:
+        - c1_15
+
+    - name: "HA: X-HAPROXY-HOST HTTP header (case insensitive)"
+      debug:
+        msg: "{{ web_intranet_header.stdout }}"
+      when: "inventory_hostname in groups.web"
+      run_once: True
+      tags:
+        - c1_15
+
+    - pause:
+        prompt: "Please mark now aspect - HA: X-HAPROXY-HOST HTTP header (case insensitive)"
+      tags:
+        - c1_15
+
+    ## Users: User from CSV file imported
+    - name: "Count user entries"
+      shell: "cat /etc/passwd | wc -l" 
+      register: users_imported_count
+      when: "inventory_hostname in groups.linux"
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c1_16
+
+    - name: "Test if amount of users is higher than 50"
+      assert:
+        that:
+          - "users_imported_count.stdout|int > 50"
+        success_msg: "Users have been correctly imported"
+        fail_msg: "Users have not been correctly imported. Expected count more than 50. Returned count: {{ users_imported_count.stdout }}"
+        quiet: true
+      ignore_errors: true
+      when: "inventory_hostname in groups.linux"
+      tags:
+        - c1_16
+
+    - name: "Users: User from CSV file imported"
+      debug:
+        msg: "{{ users_imported_count.stdout }}"
+      when: "inventory_hostname in groups.linux"
+      tags:
+        - c1_16
+
+    - pause:
+        prompt: "Please mark now aspect - Users: User from CSV file imported"
+      tags:
+        - c1_16
+
+    # Users: Password is not overwritten
+    - name: "Change password of user noah on LIN1"
+      shell: "echo noah:prq7mawtDa | chpasswd" 
+      when: "inventory_hostname == 'LIN1'"
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c1_17
+
+    - name: "Running in 15 secs /data/ansible/linux/7-users.yml to validate if password won't be overwritten"
+      pause:
+        seconds: 10
+      tags:
+        - c1_17
+        
+- ansible.builtin.import_playbook: /data/ansible/linux/7-users.yml
+  tags:
+    - c1_17
