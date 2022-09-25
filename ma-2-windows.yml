@@ -1,0 +1,175 @@
+---
+- name: MARKING - Windows
+  hosts: windows
+  any_errors_fatal: false
+  tasks:
+    ## Windows: Hostname
+    - name: "Windows: Hostname"
+      debug:
+        var: ansible_hostname
+      when: 
+        - "'windows' in group_names"
+      tags:
+        - c2_1
+
+    - name: Assert Hostname
+      assert:
+        that: "hostname == ansible_hostname"
+        success_msg: Hostname is correctly configured
+        fail_msg: "Hostname doesn't match. Configured: {{ ansible_hostname }}. Expected: {{ hostname }}"
+        quiet: true
+      ignore_errors: true
+      when: 
+        - "'windows' in group_names"
+      tags:
+        - c2_1
+
+    - pause:
+        prompt: "Please mark now aspect - Windows: Hostname"
+      tags:
+        - c2_1
+
+    ## Root certificate exists
+    - name: "Retrieve root certificate"
+      win_shell: "dir Cert:\\LocalMachine\\Root | ? {$_.Subject -imatch 'applix'} | select Subject" 
+      register: win_root_cert
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c2_2
+
+    - name: "Root certificate exists"
+      debug:
+        var: win_root_cert.stdout
+      tags:
+        - c2_2
+
+    - pause:
+        prompt: "Please mark now aspect - Root certificate exists"
+      tags:
+        - c2_2
+
+    ## Private key of the root certificate exists in certificate store
+    - name: "Retrieve private key of root certificate"
+      win_shell: "dir Cert:\\LocalMachine\\My | ? {$_.Subject -imatch 'applix'} | select HasPrivateKey,Subject" 
+      register: win_root_private_key
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c2_3
+
+    - name: "Private key of the root certificate exists in certificate store"
+      debug:
+        var: win_root_private_key.stdout
+      tags:
+        - c2_3
+
+    - pause:
+        prompt: "Please mark now aspect - Private key of the root certificate exists in certificate store"
+      tags:
+        - c2_3
+
+    ## Security: RDP service
+    - name: "Get RDP service state"
+      win_shell: "Get-Service TermService | select-object Name, DisplayName, @{ n='Status'; e={ $_.Status.ToString() } } | ConvertTo-JSON" 
+      register: win_rdp_state
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c2_4
+
+    - name: "Test if TermService is stopped"
+      assert:
+        that:
+          - "(win_rdp_state.stdout|from_json).Status == 'Stopped'"
+        success_msg: "TermService is in correct state"
+        fail_msg: "TermService is not in correct state. Expected state Stopped. Returned count: {{ (win_rdp_state.stdout|from_json).Status }}"
+        quiet: true
+      ignore_errors: true
+      tags:
+        - c2_4
+
+    - name: "Security: RDP service"
+      debug:
+        msg: "{{ (win_rdp_state.stdout|from_json).Name }} => State: {{ (win_rdp_state.stdout|from_json).Status }}"
+      tags:
+        - c2_4
+
+    - pause:
+        prompt: "Please mark now aspect - Security: RDP service"
+      tags:
+        - c2_4
+
+    ## Security: Uptime logging
+    - name: "Get uptime log file"
+      win_shell: "Get-Content C:\\uptime.txt | Select-Object -Last 5" 
+      register: win_uptime_log
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c2_5
+
+    - name: "Security: Uptime logging"
+      debug:
+        var: "win_uptime_log.stdout"
+      tags:
+        - c2_5
+
+    - pause:
+        prompt: "Please mark now aspect - Security: Uptime logging"
+      tags:
+        - c2_5
+
+    ## AD: AD domain customers.com
+    - name: "Get AD domain controller information"
+      win_shell: "Get-ADDomainController -Filter *| select Name,Domain" 
+      register: win_ad_controller
+      when: "inventory_hostname in groups.dc"
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c2_6
+
+    - name: "AD: AD domain customers.com"
+      debug:
+        var: "win_ad_controller.stdout"
+      when: "inventory_hostname in groups.dc"
+      tags:
+        - c2_6
+
+    - pause:
+        prompt: "Please mark now aspect - AD: AD domain customers.com"
+      tags:
+        - c2_6
+
+    ## AD: WIN hosts are joined to domain customer.com
+    - name: "Get AD join state"
+      win_shell: "Get-WmiObject -Namespace root\\cimv2 -Class Win32_ComputerSystem | Select Name, Domain | ConvertTo-JSON" 
+      register: win_ad_join_state
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c2_7
+
+    - name: "Test if host is joined to AD"
+      assert:
+        that:
+          - "'Domain' in (win_ad_join_state.stdout|from_json)"
+          - "(win_ad_join_state.stdout|from_json).Domain == 'customers.com'"
+        success_msg: "{{ hostname }} is correctly joined to AD customers.com"
+        fail_msg: "{{ hostname }} is not in joined to domain. Expected: customers.com. Returned: {{ (win_ad_join_state.stdout|from_json) }}"
+        quiet: true
+      ignore_errors: true
+      tags:
+        - c2_7
+
+    - name: "AD: WIN hosts are joined to domain customer.com"
+      debug:
+        var: "win_ad_join_state.stdout"
+      tags:
+        - c2_7
+
+    - pause:
+        prompt: "Please mark now aspect - AD: WIN hosts are joined to domain customer.com"
+      tags:
+        - c2_7
