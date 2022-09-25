@@ -1,0 +1,177 @@
+---
+- name: MARKING - Network
+  hosts: cisco
+  any_errors_fatal: false
+  tasks:
+    ## Windows: Hostname
+    - name: "Network: Hostname"
+      debug:
+        var: ansible_net_hostname
+      tags:
+        - c3_1
+
+    - name: Assert Hostname
+      assert:
+        that: "hostname == ansible_net_hostname"
+        success_msg: Hostname is correctly configured
+        fail_msg: "Hostname doesn't match. Configured: {{ ansible_net_hostname }}. Expected: {{ hostname }}"
+        quiet: true
+      ignore_errors: true
+      tags:
+        - c3_1
+
+    - pause:
+        prompt: "Please mark now aspect - Network: Hostname"
+      tags:
+        - c3_1
+
+    ## Security: Management interface secured by ACL
+    - name: "Retrieve ACLs"
+      ios_command:
+        commands:
+          - "show ip interface GigabitEthernet1 | include Inbound  access"
+          - "show ip access-lists"
+      register: net_mgmt_acl
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c3_2
+
+    - name: "Security: Management interface secured by ACL"
+      debug:
+        var: net_mgmt_acl.stdout
+      tags:
+        - c3_2
+
+    - pause:
+        prompt: "Please mark now aspect - Security: Management interface secured by ACL"
+      tags:
+        - c3_2
+
+    ## Network: Loopback interface configured
+    - name: "Retrieve Loopback0 interface"
+      ios_command:
+        commands:
+          - "show ip interface Loopback0 | include Internet address"
+      register: net_loopback0
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c3_3
+        - c3_4
+      
+    - name: Assert Loopback0 interface
+      assert:
+        that: "(starting_from_zero in net_loopback0.stdout|first) or (starting_from_one in net_loopback0.stdout|first)"
+        success_msg: Hostname is correctly configured
+        fail_msg: "Hostname doesn't match. Expected: {{ starting_from_zero }} OR {{ starting_from_one }}. Configured: {{ net_loopback0.stdout|first }}"
+        quiet: true
+      ignore_errors: true
+      vars:
+        starting_from_zero_address: "{{ loop_net | ansible.netcommon.ipaddr(groups.cisco.index(inventory_hostname)|int) | ansible.netcommon.ipaddr('address') | string }}"
+        starting_from_zero: "{{ starting_from_zero_address + '/32' }}"
+        starting_from_one_address: "{{ loop_net | ansible.netcommon.ipaddr(groups.cisco.index(inventory_hostname)|int + 1) | ansible.netcommon.ipaddr('address') | string }}"
+        starting_from_one: "{{ starting_from_one_address + '/32' }}"
+      tags:
+        - c3_3
+
+    - name: "Network: Loopback interface configured"
+      debug:
+        var: net_loopback0.stdout
+      tags:
+        - c3_3
+
+    - pause:
+        prompt: "Please mark now aspect - Network: Loopback interface configured"
+      tags:
+        - c3_3
+
+    ## Routing: Reachability of loopback of internal & edge routers
+    - name: "Execute ping from RTR4 to loopback0 interfaces"
+      ios_ping:
+        dest: "{{ net_loopback0 | regex_search('Internet address is ([0-9\\.]+)/32', '\\1') | first}}"
+      register: net_ping_loop0
+      ignore_errors: true
+      changed_when: False
+      delegate_to: RTR4
+      when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
+      tags:
+        - c3_4
+
+    - name: "Routing: Reachability of loopback of internal & edge routers"
+      debug:
+        msg: "{{ net_ping_loop0.commands|first }} from RTR4. Packet_loss: {{ net_ping_loop0.packet_loss }}. Tx/Rx: {{ net_ping_loop0.packets_tx }}/{{ net_ping_loop0.packets_rx }}"
+      when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
+      tags:
+        - c3_4
+
+    - pause:
+        prompt: "Please mark now aspect - Routing: Reachability of loopback of internal & edge routers"
+      tags:
+        - c3_4
+
+    ## BGP: Loopback 0 is used for iBGP peering
+    - name: "Retrieve BGP summary from internal routers"
+      ios_command:
+        commands: 
+          - "show bgp summary | begin Neighbor"
+      register: net_ibgp_summary
+      ignore_errors: true
+      changed_when: False
+      when: "(inventory_hostname in groups.internal)"
+      tags:
+        - c3_5
+
+    - name: "BGP: Loopback 0 is used for iBGP peering"
+      debug:
+        var: "net_ibgp_summary.stdout"
+      when: "(inventory_hostname in groups.internal)"
+      tags:
+        - c3_5
+
+    - pause:
+        prompt: "Please mark now aspect - BGP: Loopback 0 is used for iBGP peering"
+      tags:
+        - c3_5
+
+    ## BGP: Loopback 1 is advertised on external routers
+    - name: "Execute show ip route on RTR7"
+      ios_command:
+        commands: 
+          - "show ip route 8.8.8.8"
+      register: net_rtr7_loop1
+      ignore_errors: true
+      changed_when: False
+      when: "(inventory_hostname == 'RTR7')"
+      tags:
+        - c3_6
+
+    - name: "Execute show ip route on RTR8"
+      ios_command:
+        commands: 
+          - "show ip route 1.1.1.1"
+      register: net_rtr8_loop1
+      ignore_errors: true
+      changed_when: False
+      when: "(inventory_hostname == 'RTR8')"
+      tags:
+        - c3_6
+
+    - name: "BGP: Loopback 1 is advertised on RTR7"
+      debug:
+        var: "net_rtr7_loop1.stdout"
+      when: "(inventory_hostname == 'RTR7')"
+      tags:
+        - c3_6
+
+    - name: "BGP: Loopback 1 is advertised on RTR8"
+      debug:
+        var: "net_rtr8_loop1.stdout"
+      when: "(inventory_hostname == 'RTR8')"
+      tags:
+        - c3_6
+
+    - pause:
+        prompt: "Please mark now aspect - BGP: Loopback 1 is advertised on external routers"
+      tags:
+        - c3_6
