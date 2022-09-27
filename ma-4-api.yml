@@ -1,0 +1,642 @@
+---
+- name: MARKING - API
+  hosts: localhost
+  any_errors_fatal: false
+  vars:
+    ansible_become_password: "Incheon-2022"
+  tasks:
+    ## systemd service applix-api is running
+    - name: "Retrieve applix-api status"
+      shell: "systemctl status applix-api"
+      register: api_systemd_status
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_1
+
+    - name: "systemd service applix-api is running"
+      debug:
+        var: api_systemd_status.stdout
+      tags:
+        - c4_1
+
+    - pause:
+        prompt: "Please mark now aspect - systemd service applix-api is running"
+      tags:
+        - c4_1
+
+    ## Endpoint /stats
+    - name: "Change applix-api process priority"
+      shell: "renice -n -2 -p $(systemctl show --property MainPID --value applix-api)"
+      ignore_errors: true
+      changed_when: False
+      become: true
+      tags:
+        - c4_2
+
+    - name: "curl /stats"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/stats"
+        return_content: yes
+        validate_certs: false
+        timeout: 120
+      register: api_stats
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_2
+
+    - name: "Endpoint /stats"
+      debug:
+        var: api_stats.content
+      tags:
+        - c4_2
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint /stats"
+      tags:
+        - c4_2
+
+    ## Endpoint /stats
+    - name: "Try a failed login on the API"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/login"
+        method: POST
+        return_content: true
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "isabella"
+        url_password: "invalid"
+        timeout: 120
+        status_code: [403, 401]
+      register: api_failed_login
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_3
+
+    - name: "Try to login successfully on the API"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/login"
+        method: POST
+        return_content: true
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "isabella"
+        url_password: "Fwas6EMQJy"
+        timeout: 120
+      register: api_success_login
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_3
+
+    - name: "Endpoint /login - failed login"
+      debug:
+        var: api_failed_login
+      tags:
+        - c4_3
+
+    - name: "Endpoint /login - success login"
+      debug:
+        var: api_success_login
+      tags:
+        - c4_3
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint /login"
+      tags:
+        - c4_3
+
+    ## Fail2ban
+    - name: "Send 4x invalid password to /login"
+      ansible.builtin.uri:
+        url: "https://10.22.0.50/login"
+        method: POST
+        return_content: true
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "isabella"
+        url_password: "invalid"
+        timeout: 30
+        status_code: [403, 401]
+      ignore_errors: true
+      changed_when: False
+      loop: "{{ range(0,5,1) }}"
+      loop_control:
+        pause: 1
+      tags:
+        - c4_4
+
+    - name: "Unban everything"
+      shell: "fail2ban-client unban --all"
+      ignore_errors: true
+      changed_when: False
+      become: true
+      tags:
+        - c4_4
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint /login"
+      tags:
+        - c4_4
+
+    ## Endpoint /logout
+    - name: "Logout: get a token"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/login"
+        method: POST
+        return_content: true
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "isabella"
+        url_password: "Fwas6EMQJy"
+        timeout: 120
+      register: api_logout_token
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_5
+
+    - name: "Logout: whoami"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/whoami"
+        return_content: true
+        validate_certs: False
+        headers:
+          token: "{{ api_logout_token.json.token }}"
+        timeout: 120
+      register: api_logout_whoami
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_5
+
+    - name: "Logout: Trigger logout"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/logout"
+        method: POST
+        return_content: true
+        validate_certs: False
+        headers:
+          token: "{{ api_logout_token.json.token }}"
+        timeout: 120
+      register: api_logout_logout
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_5
+
+    - name: "Logout: Retry whoami with invalid token"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/whoami"
+        return_content: true
+        validate_certs: False
+        headers:
+          token: "{{ api_logout_token.json.token }}"
+        timeout: 120
+        status_code: [403, 401]
+      register: api_logout_whoami_invalid
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_5
+
+    - name: "Endpoint /logout"
+      debug:
+        msg: |-
+          "/whoami => {{ api_logout_whoami.content }}"
+          "/logout => {{ api_logout_logout.content }}"
+          "/whoami => {{ api_logout_whoami_invalid.content }}"
+      tags:
+        - c4_5
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint /logout"
+      tags:
+        - c4_5
+
+    ## Endpoint GET /network/devices/stats
+    - name: "Call GET /network/devices/stats"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/network/devices/stats"
+        return_content: true
+        validate_certs: false
+        timeout: 300
+      register: api_net_device_stats
+      ignore_errors: true
+      changed_when: False
+      retries: 3
+      delay: 2
+      until: api_net_device_stats is succeeded
+      tags:
+        - c4_6
+
+    - name: "Endpoint GET /network/devices/stats"
+      debug:
+        var: api_net_device_stats
+      ignore_errors: true
+      tags:
+        - c4_6
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint GET /network/devices/stats"
+      tags:
+        - c4_6
+
+    ## Endpoint GET /network/devices/stats
+    - name: "Call GET /network/devices/stats?management_ip=10.22.0.204"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/network/devices/stats?management_ip=10.22.0.204"
+        return_content: true
+        validate_certs: false
+        timeout: 300
+      register: api_net_device_stats_filtered
+      ignore_errors: true
+      changed_when: False
+      retries: 3
+      delay: 2
+      until: api_net_device_stats_filtered is succeeded
+      tags:
+        - c4_7
+
+    - name: "Endpoint GET /network/devices/stats - filter by management IP"
+      debug:
+        var: api_net_device_stats_filtered
+      ignore_errors: true
+      tags:
+        - c4_7
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint GET /network/devices/stats - filter by management IP"
+      tags:
+        - c4_7
+
+    ## Endpoint GET /network/devices/bgp
+    - name: "Call GET /network/devices/bgp"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/network/devices/bgp"
+        return_content: true
+        validate_certs: false
+        timeout: 300
+      register: api_net_devices_bgp
+      ignore_errors: true
+      changed_when: False
+      retries: 3
+      delay: 2
+      until: api_net_devices_bgp is succeeded
+      tags:
+        - c4_8
+
+    - name: "Endpoint GET /network/devices/bgp"
+      debug:
+        var: api_net_devices_bgp
+      ignore_errors: true
+      tags:
+        - c4_8
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint GET /network/devices/bgp"
+      tags:
+        - c4_8
+
+    ## Endpoint GET /network/devices/bgp – filter by management IP
+    - name: "Call GET /network/devices/bgp?management_ip=10.22.0.202"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/network/devices/bgp?management_ip=10.22.0.202"
+        return_content: true
+        validate_certs: false
+        timeout: 300
+      register: api_net_devices_bgp_filtered
+      ignore_errors: true
+      changed_when: False
+      retries: 3
+      delay: 2
+      until: api_net_devices_bgp_filtered is succeeded
+      tags:
+        - c4_9
+
+    - name: "Endpoint GET /network/devices/bgp – filter by management IP"
+      debug:
+        var: api_net_devices_bgp_filtered
+      ignore_errors: true
+      tags:
+        - c4_9
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint GET /network/devices/bgp – filter by management IP"
+      tags:
+        - c4_9
+
+    ## Endpoint GET /network/devices/routes
+    - name: "Call GET /network/devices/routes"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/network/devices/routes"
+        return_content: true
+        validate_certs: false
+        timeout: 300
+      register: api_net_devices_routes
+      ignore_errors: true
+      changed_when: False
+      retries: 3
+      delay: 2
+      until: api_net_devices_routes is succeeded
+      tags:
+        - c4_10
+
+    - name: "Endpoint GET /network/devices/routes"
+      debug:
+        var: api_net_devices_routes
+      ignore_errors: true
+      tags:
+        - c4_10
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint GET /network/devices/routes"
+      tags:
+        - c4_10
+
+    ## Endpoint GET /network/devices/routes – filter by management IP
+    - name: "Call GET /network/devices/routes?management_ip=10.22.0.208"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/network/devices/routes?management_ip=10.22.0.208"
+        return_content: true
+        validate_certs: false
+        timeout: 300
+      register: api_net_devices_routes_filtered
+      ignore_errors: true
+      changed_when: False
+      retries: 3
+      delay: 2
+      until: api_net_devices_routes_filtered is succeeded
+      tags:
+        - c4_11
+
+    - name: "Endpoint GET /network/devices/routes – filter by management IP"
+      debug:
+        var: api_net_devices_routes_filtered
+      ignore_errors: true
+      tags:
+        - c4_11
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint GET /network/devices/routes – filter by management IP"
+      tags:
+        - c4_11
+
+    ## Endpoint PUT /network/loopback
+    - name: "Loopback: Get a token"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/login"
+        method: POST
+        return_content: true
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "isabella"
+        url_password: "Fwas6EMQJy"
+        timeout: 120
+      register: api_loop_token
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_12
+        - c4_13
+
+    - name: "Call PUT /network/loopback"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/network/loopback"
+        method: PUT
+        return_content: true
+        validate_certs: False
+        headers:
+          token: "{{ api_loop_token.json.token }}"
+        body_format: json
+        body:
+          number: 10
+          ip: "8.8.4.4/32"
+          desc: "ASSESSMENT"
+          management_ip: "10.22.0.208"
+        timeout: 120
+      register: api_loop_put
+      ignore_errors: true
+      changed_when: False
+      retries: 3
+      delay: 2
+      until: api_loop_put is succeeded
+      tags:
+        - c4_12
+
+    - name: "Execute show ip int br on RTR8"
+      ios_command:
+        commands: 
+          - "show ip int br | inc Loopback10"
+      register: api_loop_rtr8
+      ignore_errors: true
+      changed_when: false
+      delegate_to: RTR8
+      tags:
+        - c4_12
+
+    - name: "Endpoint PUT /network/loopback"
+      debug:
+        var: "api_loop_rtr8.stdout"
+      tags:
+        - c4_12
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint PUT /network/loopback"
+      tags:
+        - c4_12
+
+    ## Endpoint DELETE /network/loopback
+    - name: "Call DELETE /network/loopback"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/network/loopback"
+        method: DELETE
+        return_content: true
+        validate_certs: False
+        headers:
+          token: "{{ api_loop_token.json.token }}"
+        body_format: json
+        body:
+          number: 10
+          ip: "8.8.4.4/32"
+          desc: "ASSESSMENT"
+          management_ip: "10.22.0.208"
+        timeout: 120
+      register: api_loop_delete
+      ignore_errors: true
+      changed_when: False
+      retries: 3
+      delay: 2
+      until: api_loop_delete is succeeded
+      tags:
+        - c4_13
+
+    - name: "Execute again show ip int br on RTR8"
+      ios_command:
+        commands: 
+          - "show ip int br | inc Loopback10"
+      register: api_loop_rtr8_delete
+      ignore_errors: true
+      changed_when: false
+      delegate_to: RTR8
+      tags:
+        - c4_13
+
+    - name: "Endpoint DELETE /network/loopback"
+      debug:
+        var: "api_loop_rtr8_delete.stdout"
+      tags:
+        - c4_13
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint DELETE /network/loopback"
+      tags:
+        - c4_13
+
+
+    ## Endpoint PUT /customers/ - Trigger customer deployment
+    - name: "Call PUT /customers/"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/customers/"
+        method: PUT
+        return_content: true
+        validate_certs: False
+        body_format: json
+        body:
+          name: "SmartCorp"
+          domain_prefix: "smartcorp"
+          username: "smartguy"
+          password: "$mart4Life"
+          message: "We will make your company smart"
+        timeout: 900
+        status_code: [200, 201]
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_14
+
+    - name: "Read customers.json"
+      shell: "cat /etc/ansible/customers.json"
+      register: customers_json
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_14
+
+    - name: "Check background jobs"
+      shell: "ps aux | grep ansible-playbook"
+      register: ps_ansible_playbook
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_14
+
+    - name: "Endpoint PUT /customers/ - Trigger customer deployment"
+      debug:
+        msg: |-
+          "{{ customers_json.stdout }}"
+
+          "{{ ps_ansible_playbook.stdout }}"
+      tags:
+        - c4_14
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint PUT /customers/ - Trigger customer deployment"
+      tags:
+        - c4_14
+
+    ## Endpoint PUT /customers/ - New customer onboarded
+    - name: "Execute Get-ADOrganizationalUnit on WIN1"
+      win_shell: "Get-ADOrganizationalUnit -Filter 'Name -eq \"SmartCorp\"'"
+      register: customers_ad
+      delegate_to: WIN1
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_15
+
+    - name: "Execute dig on new customer domain"
+      shell: "dig @10.22.0.101 smartcorp.customers.com +noall +answer"
+      register: customers_dig
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_15
+
+    - name: "Call smartcorp.customers.com on WIN1"
+      win_shell: "Invoke-WebRequest http://smartcorp.customers.com -UseBasicParsing"
+      register: customers_web
+      delegate_to: WIN1
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_15
+
+    - name: "Endpoint PUT /customers/ - New customer onboarded"
+      debug:
+        msg: |-
+          ==> OU: {{ customers_ad.stdout }}
+          ==> DNS:
+          {{ customers_dig.stdout }}
+          ==> Web
+          {{ customers_web.stdout }}
+      tags:
+        - c4_15
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint PUT /customers/ - New customer onboarded"
+      tags:
+        - c4_15
+  
+    ## Endpoint /healthz
+    - name: "Call GET /healthz"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/healthz"
+        return_content: true
+        validate_certs: false
+        status_code: [200,500]
+      register: api_healthz_1
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_16
+
+    - name: "Call GET /invalid"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/invalid"
+        return_content: true
+        validate_certs: false
+        status_code: [404]
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_16
+
+    - name: "Call GET /healthz again"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/healthz"
+        return_content: true
+        validate_certs: false
+        status_code: [200,500]
+      register: api_healthz_2
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c4_16
+
+    - name: "Endpoint /healthz"
+      debug:
+        msg: |-
+          ===== Before: ====
+          "{{ api_healthz_1.content }}"
+          ===== After =======
+          "{{ api_healthz_2.content }}"
+      tags:
+        - c4_16
+
+    - pause:
+        prompt: "Please mark now aspect - Endpoint /healthz"
+      tags:
+        - c4_16

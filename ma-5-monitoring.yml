@@ -1,0 +1,142 @@
+---
+- name: MARKING - Monitoring
+  hosts: monitoring
+  any_errors_fatal: false
+  become: true
+  vars:
+    ansible_become_password: "Incheon-2022"
+  tasks:
+    ## systemd service applix-api is running
+    - name: "Retrieve Galera cluster status"
+      shell: 'mysql monitoring -e "SHOW GLOBAL STATUS LIKE \"wsrep_local_state_comment\";"'
+      register: mon_cluster_status
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c5_1
+
+    - name: "MariaDB Galera cluster & database"
+      debug:
+        var: mon_cluster_status.stdout
+      tags:
+        - c5_1
+
+    - pause:
+        prompt: "Please mark now aspect - MariaDB Galera cluster & database"
+      tags:
+        - c5_1
+
+    ## systemd service applix-api is running
+    - name: "Add drop ICMP iptables rule on LIN4"
+      shell: 'iptables -I INPUT 1 -p icmp -j DROP'
+      delegate_to: LIN4
+      run_once: true
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c5_2
+    
+    - name: "Wait max. 2min until an ICMP alerts will be triggered"
+      pause:
+        minutes: 2
+      tags:
+        - c5_2
+
+    - name: "Retrieve alerts from database"
+      shell: 'mysql monitoring -e "SELECT * FROM alerts ORDER BY timestamp DESC LIMIT 10;"'
+      register: mon_icmp_alerts
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c5_2
+
+    - name: "Delete drop ICMP iptables rule on LIN4"
+      shell: 'iptables -D INPUT 1'
+      delegate_to: LIN4
+      run_once: true
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c5_2
+
+    - name: "All hosts are monitored with ICMP"
+      debug:
+        var: mon_icmp_alerts.stdout
+      delegate_to: LIN1
+      run_once: true
+      tags:
+        - c5_2
+
+    - pause:
+        prompt: "Please mark now aspect - All hosts are monitored with ICMP"
+      tags:
+        - c5_2
+
+    ## The API is monitored
+    - name: "Stop redis service"
+      systemd: 
+        name: redis
+        state: stopped
+      delegate_to: localhost
+      run_once: true
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c5_3
+
+    - name: "Try to login on the API"
+      ansible.builtin.uri:
+        url: "https://127.0.0.1/login"
+        method: POST
+        return_content: true
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "isabella"
+        url_password: "Fwas6EMQJy"
+        timeout: 10
+        status_code: [200, 500]
+      loop: "{{ range(0,50,1) }}"
+      delegate_to: localhost
+      run_once: true
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c5_3
+
+    - name: "Wait max. 2min until an ICMP alerts will be triggered"
+      pause:
+        minutes: 2
+      tags:
+        - c5_3
+
+    - name: "Retrieve alerts from database"
+      shell: 'mysql monitoring -e "SELECT * FROM alerts ORDER BY timestamp DESC LIMIT 10;"'
+      register: mon_icmp_alerts
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c5_3
+
+    - name: "Start redis service again"
+      systemd: 
+        name: redis
+        state: started
+      delegate_to: localhost
+      run_once: true
+      ignore_errors: true
+      changed_when: False
+      tags:
+        - c5_3
+
+    - name: "The API is monitored"
+      debug:
+        var: mon_icmp_alerts.stdout
+      delegate_to: LIN1
+      run_once: true
+      tags:
+        - c5_3
+
+    - pause:
+        prompt: "Please mark now aspect - The API is monitored"
+      tags:
+        - c5_3
