@@ -175,3 +175,127 @@
         prompt: "Please mark now aspect - BGP: Loopback 1 is advertised on external routers"
       tags:
         - c3_6
+
+    ## BGP: Full mesh eBGP peerings with password authentication
+    - name: "Execute show ip bgp neighbor on external routers"
+      ios_command:
+        commands: 
+          - "show ip bgp neighbor | include Option|BGP neighbor|BGP state"
+      register: net_bgp_external_peering
+      ignore_errors: true
+      changed_when: False
+      when: "inventory_hostname in groups.external"
+      tags:
+        - c3_7
+
+    - name: "BGP: Full mesh eBGP peerings with password authentication"
+      debug:
+        var: "net_bgp_external_peering.stdout"
+      when: "inventory_hostname in groups.external"
+      tags:
+        - c3_7
+
+    - pause:
+        prompt: "Please mark now aspect - BGP: Full mesh eBGP peerings with password authentication"
+      tags:
+        - c3_7
+
+    ## BGP: Max-path is greater than 1
+    - name: "Execute show ip bgp summary and searching for multipath"
+      ios_command:
+        commands: 
+          - "show ip bgp summary | include multipath"
+      register: net_bgp_maxpath
+      ignore_errors: true
+      changed_when: False
+      when: "(inventory_hostname in groups.external) or (inventory_hostname in groups.edge)"
+      tags:
+        - c3_8
+
+    - name: "BGP: Max-path is greater than 1"
+      debug:
+        var: "net_bgp_maxpath.stdout"
+      when: "(inventory_hostname in groups.external) or (inventory_hostname in groups.edge)"
+      tags:
+        - c3_8
+
+    - pause:
+        prompt: "Please mark now aspect - BGP: Max-path is greater than 1"
+      tags:
+        - c3_8
+
+    ## Folder /data/cisco/backup contains config backups
+    - name: "Remove all existing cisco backups"
+      shell:
+        cmd: "rm /data/cisco/backup/*.cfg ; git add . ; git commit -m 'Assessment'"
+        chdir: "/data/cisco/backup"
+        warn: false
+      ignore_errors: true
+      changed_when: false
+      failed_when: false
+      run_once: true
+      delegate_to: localhost
+      tags:
+        - c3_9
+
+- name: Run backup playbook of competitor
+  ansible.builtin.import_playbook: /data/ansible/cisco/8-backup.yml
+  any_errors_fatal: false
+  tags:
+    - c3_9
+
+- name: MARKING - Network Part 2
+  hosts: localhost
+  any_errors_fatal: false
+  tasks:
+    - name: "Show content of backup folder"
+      shell: "ls -la /data/cisco/backup"
+      register: net_backup_ls
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c3_9
+
+    - name: "Print few lines of each backup file"
+      shell: "head -n 15 /data/cisco/backup/*.cfg"
+      register: net_backup_head
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c3_9
+
+    - name: "Folder /data/cisco/backup contains config backups - list directory"
+      debug:
+        var: "net_backup_ls.stdout"
+      tags:
+        - c3_9
+
+    - name: "Folder /data/cisco/backup contains config backups - print content of each backup file"
+      debug:
+        var: "net_backup_head.stdout"
+      tags:
+        - c3_9
+
+    - pause:
+        prompt: "Please mark now aspect - Folder /data/cisco/backup contains config backups"
+      tags:
+        - c3_9
+
+    - name: "Retrieve git log"
+      shell: "git --git-dir /data/cisco/backup/.git log"
+      register: net_git_log
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c3_10
+
+    - name: "Folder /data/cisco/backup is a git repository"
+      debug:
+        var: "net_git_log.stdout"
+      tags:
+        - c3_10
+
+    - pause:
+        prompt: "Please mark now aspect - Folder /data/cisco/backup is a git repository"
+      tags:
+        - c3_10
