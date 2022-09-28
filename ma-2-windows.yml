@@ -34,7 +34,7 @@
       win_shell: "dir Cert:\\LocalMachine\\Root | ? {$_.Subject -imatch 'applix'} | select Subject" 
       register: win_root_cert
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c2_2
 
@@ -54,7 +54,7 @@
       win_shell: "dir Cert:\\LocalMachine\\My | ? {$_.Subject -imatch 'applix'} | select HasPrivateKey,Subject" 
       register: win_root_private_key
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c2_3
 
@@ -74,7 +74,7 @@
       win_shell: "Get-Service TermService | select-object Name, DisplayName, @{ n='Status'; e={ $_.Status.ToString() } } | ConvertTo-JSON" 
       register: win_rdp_state
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c2_4
 
@@ -105,7 +105,7 @@
       win_shell: "Get-Content C:\\uptime.txt | Select-Object -Last 5" 
       register: win_uptime_log
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c2_5
 
@@ -120,36 +120,80 @@
       tags:
         - c2_5
 
+    ## Tools: Telnet client
+    - name: "Get Windows Feature Telnet"
+      win_shell: "Get-WindowsFeature Telnet-Client | select-object Name, @{ n='InstallState'; e={ $_.InstallState.ToString() } } | ConvertTo-JSON" 
+      register: win_telnet
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c2_6
+
+    - name: "Test if Telnet is installed on GUI server"
+      assert:
+        that:
+          - "(win_telnet.stdout|from_json).InstallState == 'Installed'"
+        success_msg: "Telnet is in correctly installed"
+        fail_msg: "TermService is not installed. Expected state: Installed. Returned count: {{ (win_telnet.stdout|from_json).InstallState }}"
+        quiet: true
+      ignore_errors: true
+      when: ansible_os_installation_type == 'Server'
+      tags:
+        - c2_6
+
+    - name: "Test if Telnet is NOT installed on CORE servers"
+      assert:
+        that:
+          - "(win_telnet.stdout|from_json).InstallState != 'Installed'"
+        success_msg: "Telnet is in correctly not installed"
+        fail_msg: "TermService is installed. Expected state: Available. Returned count: {{ (win_telnet.stdout|from_json).InstallState }}"
+        quiet: true
+      ignore_errors: true
+      when: ansible_os_installation_type != 'Server'
+      tags:
+        - c2_6
+
+    - name: "Tools: Telnet client"
+      debug:
+        var: "win_telnet.stdout"
+      tags:
+        - c2_6
+
+    - pause:
+        prompt: "Please mark now aspect - Tools: Telnet client"
+      tags:
+        - c2_6
+
     ## AD: AD domain customers.com
     - name: "Get AD domain controller information"
       win_shell: "Get-ADDomainController -Filter *| select Name,Domain" 
       register: win_ad_controller
       when: "inventory_hostname in groups.dc"
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c2_6
+        - c2_7
 
     - name: "AD: AD domain customers.com"
       debug:
         var: "win_ad_controller.stdout"
       when: "inventory_hostname in groups.dc"
       tags:
-        - c2_6
+        - c2_7
 
     - pause:
         prompt: "Please mark now aspect - AD: AD domain customers.com"
       tags:
-        - c2_6
+        - c2_7
 
     ## AD: WIN hosts are joined to domain customer.com
     - name: "Get AD join state"
       win_shell: "Get-WmiObject -Namespace root\\cimv2 -Class Win32_ComputerSystem | Select Name, Domain | ConvertTo-JSON" 
       register: win_ad_join_state
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c2_7
+        - c2_8
 
     - name: "Test if host is joined to AD"
       assert:
@@ -161,15 +205,15 @@
         quiet: true
       ignore_errors: true
       tags:
-        - c2_7
+        - c2_8
 
     - name: "AD: WIN hosts are joined to domain customer.com"
       debug:
         var: "win_ad_join_state.stdout"
       tags:
-        - c2_7
+        - c2_8
 
     - pause:
         prompt: "Please mark now aspect - AD: WIN hosts are joined to domain customer.com"
       tags:
-        - c2_7
+        - c2_8

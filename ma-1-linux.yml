@@ -33,7 +33,7 @@
     - name: "Get iptables rules"
       shell: "iptables -L -n -v ; printf ' \n \n \n'"
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       register: out_packet_filtering
       when: 
         - "'linux' in group_names"
@@ -57,7 +57,7 @@
     - name: Reboot LIN4
       reboot:
       when: 'inventory_hostname == "LIN4"'
-      changed_when: False
+      changed_when: false
       tags:
         - c1_3
     
@@ -65,7 +65,8 @@
       shell: "iptables -L -n -v ; printf ' \n \n \n'"
       register: out_packet_filtering_lin4
       when: 'inventory_hostname == "LIN4"'
-      changed_when: False
+      ignore_errors: true
+      changed_when: false
       tags:
         - c1_3
 
@@ -82,13 +83,14 @@
         - c1_3
     
     ## DNS: Primary/Master DNS server
-    - name: "Try zone transfer from primary"
+    - name: "Try zone transfer from primary on all DNS servers"
       shell: "dig @10.22.0.2 applix.com AXFR +noall +comments +timeout=2 +tries=1"
       register: dns_primary_transfer
       when: 
         - "'dns' in group_names"
         - "inventory_hostname != groups.dns[0]"
-      changed_when: False
+      changed_when: false
+      ignore_errors: true
       tags:
         - c1_4
 
@@ -100,6 +102,7 @@
         - "inventory_hostname != groups.dns[0]"
       tags:
         - c1_4
+
     - pause:
         prompt: "Please mark now aspect - DNS: Primary/Master DNS server"
       tags:
@@ -113,9 +116,9 @@
         - "'dns' in group_names"
         - "inventory_hostname != (groups.dns|last)"
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_4
+        - c1_5
     
     - name: "Execute dig towards secondary"
       shell: "dig @{{ hostvars[item]['ansible_host'] }} applix.com SOA +noall +comments"
@@ -126,9 +129,9 @@
       delegate_to: localhost
       run_once: true
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_4
+        - c1_5
 
     - name: "DNS: Secondary/Slave DNS servers - No zone transfers between slaves allowed"
       debug:
@@ -137,7 +140,7 @@
         - "'dns' in group_names"
         - "inventory_hostname != (groups.dns|last)"
       tags:
-        - c1_4
+        - c1_5
 
     - name: "DNS: Secondary/Slave DNS servers - Slaves answer DNS queries"
       debug:
@@ -148,11 +151,12 @@
         label: "{{ item.cmd }}"
       run_once: true
       tags:
-        - c1_4
+        - c1_5
+
     - pause:
         prompt: "Please mark now aspect - Secondary/Slave DNS servers"
       tags:
-        - c1_4
+        - c1_5
     
     ## DNS: A records in zone applix.com
     - name: "Resolve all DNS entries from hosts file"
@@ -162,9 +166,9 @@
       delegate_to: localhost
       loop: "{{ groups.all }}"
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_5
+        - c1_6
 
     - name: "DNS: A records in zone applix.com"
       assert:
@@ -179,11 +183,12 @@
         label: "{{ item.cmd }}"
       run_once: true
       tags:
-        - c1_5
+        - c1_6
+
     - pause:
         prompt: "Please mark now aspect - A records in zone applix.com"
       tags:
-        - c1_5
+        - c1_6
 
     ## DNS: intranet.applix.com resolves to 10.22.0.51
     - name: "Resolve intranet.applix.com"
@@ -192,9 +197,9 @@
       run_once: true
       delegate_to: localhost
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_6
+        - c1_7
       
     - name: "DNS: intranet.applix.com resolves to 10.22.0.51"
       assert:
@@ -206,28 +211,29 @@
       delegate_to: localhost
       run_once: true
       tags:
-        - c1_6
+        - c1_7
+
     - pause:
         prompt: "Please mark now aspect - intranet.applix.com resolves to 10.22.0.51"
       tags:
-        - c1_6
+        - c1_7
     
     ## DNS: DNS server configured on Linux servers
-    - name: "Check primary nameserver configured on linux hosts"
+    - name: "Check if primary nameserver is configured on linux hosts"
       shell: "dig applix.com SOA +noall +stats | grep SERVER"
       register: dns_client_primary
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_7
+        - c1_8
 
-    - name: "Check backup nameserver configured on linux hosts"
+    - name: "Check if backup nameserver is configured on linux hosts"
       shell: "cat /etc/resolv.conf | grep nameserver"
       register: dns_client_secondaries
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_7
+        - c1_8
 
     - name: "DNS: DNS server configured on Linux servers - Check if primary nameserver is configured"
       assert:
@@ -237,7 +243,7 @@
         quiet: true
       ignore_errors: true
       tags:
-        - c1_7
+        - c1_8
 
     - name: "DNS: DNS server configured on Linux servers - Check if backup nameservers are configured"
       assert:
@@ -250,21 +256,21 @@
         quiet: true
       ignore_errors: true
       tags:
-        - c1_7
+        - c1_8
 
     - pause:
         prompt: "Please mark now aspect - DNS server configured on Linux servers"
       tags:
-        - c1_7
+        - c1_8
 
     ## DNS: DNS suffix applix.com is configured
-    - name: "Check name suffix on linux hosts"
+    - name: "Check if DNS suffix is configured on linux hosts"
       shell: "cat /etc/resolv.conf | { grep -E 'search|domain' || true; }"
       register: dns_client_suffix
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_8
+        - c1_9
 
     - name: "DNS: DNS suffix applix.com is configured"
       assert:
@@ -275,28 +281,28 @@
         quiet: true
       ignore_errors: true
       tags:
-        - c1_8
+        - c1_9
 
     - pause:
         prompt: "Please mark now aspect - DNS server configured on Linux servers"
       tags:
-        - c1_8
+        - c1_9
     
     ## Web: Webserver listen on port defined in the variable webport
-    - name: "Test if webserver listening on webport"
+    - name: "Test if webserver is listening on webport"
       ansible.builtin.uri:
         url: "http://{{ hostvars[inventory_hostname]['ansible_host'] }}:{{ webport }}"
         return_content: yes
       register: web_server_listen
       when: "inventory_hostname in groups.web"
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       delegate_to: localhost
       tags:
-        - c1_9
         - c1_10
+        - c1_11
 
-    - name: "Web: Webserver listen on port defined in the variable webport"
+    - name: "Web: Webserver listens on port defined in the variable webport"
       assert:
         that:
           - "'Hello from {}!'.format(hostname) in (web_server_listen.content)"
@@ -306,12 +312,12 @@
       ignore_errors: true
       when: "inventory_hostname in groups.web"
       tags:
-        - c1_9
+        - c1_10
 
     - pause:
-        prompt: "Please mark now aspect - Web: Webserver listen on port defined in the variable webport"
+        prompt: "Please mark now aspect - Web: Webserver listens on port defined in the variable webport"
       tags:
-        - c1_9
+        - c1_10
 
     - name: "Web: Textcolor is used"
       assert:
@@ -323,12 +329,12 @@
       ignore_errors: true
       when: "inventory_hostname in groups.web"
       tags:
-        - c1_10
+        - c1_11
 
     - pause:
-        prompt: "Please mark now aspect - Web: Webserver listen on port defined in the variable webport"
+        prompt: "Please mark now aspect - Web: Textcolor is used"
       tags:
-        - c1_10
+        - c1_11
     
     ## Web: http://intranet.applix.com is reachable
     - name: "Test if intranet.applix.com is reachable"
@@ -339,22 +345,22 @@
       when: "inventory_hostname in groups.web"
       ignore_errors: true
       delegate_to: localhost
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_11
-        - c1_15
+        - c1_12
+        - c1_16
 
     - name: "Web: http://intranet.applix.com is reachable"
       debug:
         msg: "{{ web_intranet_listen.content }}"
       when: "inventory_hostname in groups.web"
       tags:
-        - c1_11
+        - c1_12
 
     - pause:
         prompt: "Please mark now aspect - Web: http://intranet.applix.com is reachable"
       tags:
-        - c1_11
+        - c1_12
 
     ## HA: VRRP master
     - name: "Get keepalived.data"
@@ -362,13 +368,21 @@
       register: ha_keepalived_data
       when: "inventory_hostname in groups.ha"
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_12
         - c1_13
         - c1_14
+        - c1_15
 
-    - name: "Test if VRRP state is set correctly on master"
+    - name: "Wait 10sec before continuing to make sure keepalived dumps state."
+      pause:
+        seconds: 10
+      tags:
+        - c1_13
+        - c1_14
+        - c1_15
+
+    - name: "Test if VRRP state is set correctly on master node"
       assert:
         that:
           - "'Wantstate = MASTER' in ha_keepalived_data.stdout"
@@ -378,9 +392,9 @@
       ignore_errors: true
       when: "inventory_hostname == groups.ha|last"
       tags:
-        - c1_12
+        - c1_13
 
-    - name: "Test if VRRP state is set correctly on backup"
+    - name: "Test if VRRP state is set correctly on backup nodes"
       assert:
         that:
           - "'Wantstate = BACKUP' in ha_keepalived_data.stdout"
@@ -390,19 +404,19 @@
       ignore_errors: true
       when: "inventory_hostname in groups.ha[0:-1]"
       tags:
-        - c1_12
+        - c1_13
 
     - name: "HA: VRRP master"
       debug:
         msg: "{{ ha_keepalived_data.stdout | regex_findall('(^.*Wantstate.*$|^.*Priority.*$)', multiline=True) }}"
       when: "inventory_hostname in groups.ha"
       tags:
-        - c1_12
+        - c1_13
 
     - pause:
         prompt: "Please mark now aspect - HA: VRRP master"
       tags:
-        - c1_12
+        - c1_13
 
     ## HA: Floating IP is configured
     - name: "Test if floating IP is configured"
@@ -415,19 +429,19 @@
       ignore_errors: true
       when: "inventory_hostname in groups.ha"
       tags:
-        - c1_13
+        - c1_14
 
     - name: "HA: Floating IP is configured"
       debug:
         msg: "{{ ha_keepalived_data.stdout | regex_findall('^.*dev\\seth0.*$', multiline=True) }}"
       when: "inventory_hostname in groups.ha"
       tags:
-        - c1_13
+        - c1_14
 
     - pause:
         prompt: "Please mark now aspect - HA: Floating IP is configured"
       tags:
-        - c1_13
+        - c1_14
 
     ## HA: Keepalived is secured with password authentication
     - name: "Test if password authentication is set"
@@ -440,19 +454,19 @@
       ignore_errors: true
       when: "inventory_hostname in groups.ha"
       tags:
-        - c1_14
+        - c1_15
 
     - name: "HA: Keepalived is secured with password authentication"
       debug:
         msg: "{{ ha_keepalived_data.stdout | regex_findall('^.*Authentication type.*$', multiline=True) }}"
       when: "inventory_hostname in groups.ha"
       tags:
-        - c1_14
+        - c1_15
 
     - pause:
         prompt: "Please mark now aspect - HA: Keepalived is secured with password authentication"
       tags:
-        - c1_14
+        - c1_15
 
     ## HA: X-HAPROXY-HOST HTTP header (case insensitive)
     - name: "Get intranet.applix.com"
@@ -464,9 +478,9 @@
       delegate_to: localhost
       run_once: true
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_15
+        - c1_16
 
     - name: "Test if HAPROXY header is set"
       assert:
@@ -480,7 +494,7 @@
       when: "inventory_hostname in groups.web"
       run_once: true
       tags:
-        - c1_15
+        - c1_16
 
     - name: "HA: X-HAPROXY-HOST HTTP header (case insensitive)"
       debug:
@@ -488,12 +502,12 @@
       when: "inventory_hostname in groups.web"
       run_once: True
       tags:
-        - c1_15
+        - c1_16
 
     - pause:
         prompt: "Please mark now aspect - HA: X-HAPROXY-HOST HTTP header (case insensitive)"
       tags:
-        - c1_15
+        - c1_16
 
     ## Users: User from CSV file imported
     - name: "Count user entries"
@@ -501,9 +515,9 @@
       register: users_imported_count
       when: "inventory_hostname in groups.linux"
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_16
+        - c1_17
 
     - name: "Test if amount of users is higher than 50"
       assert:
@@ -515,35 +529,35 @@
       ignore_errors: true
       when: "inventory_hostname in groups.linux"
       tags:
-        - c1_16
+        - c1_17
 
-    - name: "Users: User from CSV file imported"
+    - name: "Users: Users from CSV file are imported"
       debug:
         msg: "{{ users_imported_count.stdout }}"
       when: "inventory_hostname in groups.linux"
       tags:
-        - c1_16
+        - c1_17
 
     - pause:
-        prompt: "Please mark now aspect - Users: User from CSV file imported"
+        prompt: "Please mark now aspect - Users: Users from CSV file are imported"
       tags:
-        - c1_16
+        - c1_17
 
     # Users: Password is not overwritten
     - name: "Change password of user noah on LIN1"
       shell: "echo noah:prq7mawtDa | chpasswd" 
       when: "inventory_hostname == 'LIN1'"
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
-        - c1_17
+        - c1_18
 
     - name: "Running in 15 secs /data/ansible/linux/7-users.yml to validate if password won't be overwritten"
       pause:
         seconds: 10
       tags:
-        - c1_17
+        - c1_18
         
 - ansible.builtin.import_playbook: /data/ansible/linux/7-users.yml
   tags:
-    - c1_17
+    - c1_18

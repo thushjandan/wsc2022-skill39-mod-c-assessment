@@ -33,7 +33,7 @@
           - "show ip access-lists"
       register: net_mgmt_acl
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c3_2
 
@@ -55,7 +55,7 @@
           - "show ip interface Loopback0 | include Internet address"
       register: net_loopback0
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c3_3
         - c3_4
@@ -63,8 +63,8 @@
     - name: Assert Loopback0 interface
       assert:
         that: "(starting_from_zero in net_loopback0.stdout|first) or (starting_from_one in net_loopback0.stdout|first)"
-        success_msg: Hostname is correctly configured
-        fail_msg: "Hostname doesn't match. Expected: {{ starting_from_zero }} OR {{ starting_from_one }}. Configured: {{ net_loopback0.stdout|first }}"
+        success_msg: Loopback0 is correctly configured
+        fail_msg: "Loopback0 doesn't match. Expected: {{ starting_from_zero }} OR {{ starting_from_one }}. Configured: {{ net_loopback0.stdout|first }}"
         quiet: true
       ignore_errors: true
       vars:
@@ -92,13 +92,13 @@
         dest: "{{ net_loopback0 | regex_search('Internet address is ([0-9\\.]+)/32', '\\1') | first}}"
       register: net_ping_loop0
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       delegate_to: RTR4
       when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
       tags:
         - c3_4
 
-    - name: "Routing: Reachability of loopback of internal & edge routers"
+    - name: "Routing: Reachability of internal & edge loopback interfaces"
       debug:
         msg: "{{ net_ping_loop0.commands|first }} from RTR4. Packet_loss: {{ net_ping_loop0.packet_loss }}. Tx/Rx: {{ net_ping_loop0.packets_tx }}/{{ net_ping_loop0.packets_rx }}"
       when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
@@ -117,7 +117,7 @@
           - "show bgp summary | begin Neighbor"
       register: net_ibgp_summary
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       when: "(inventory_hostname in groups.internal)"
       tags:
         - c3_5
@@ -141,7 +141,7 @@
           - "show ip route 8.8.8.8"
       register: net_rtr7_loop1
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       when: "(inventory_hostname == 'RTR7')"
       tags:
         - c3_6
@@ -152,7 +152,7 @@
           - "show ip route 1.1.1.1"
       register: net_rtr8_loop1
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       when: "(inventory_hostname == 'RTR8')"
       tags:
         - c3_6
@@ -183,7 +183,7 @@
           - "show ip bgp neighbor | include Option|BGP neighbor|BGP state"
       register: net_bgp_external_peering
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       when: "inventory_hostname in groups.external"
       tags:
         - c3_7
@@ -201,13 +201,13 @@
         - c3_7
 
     ## BGP: Max-path is greater than 1
-    - name: "Execute show ip bgp summary and searching for multipath"
+    - name: "Execute show ip bgp summary and search for multipath"
       ios_command:
         commands: 
           - "show ip bgp summary | include multipath"
       register: net_bgp_maxpath
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       when: "(inventory_hostname in groups.external) or (inventory_hostname in groups.edge)"
       tags:
         - c3_8

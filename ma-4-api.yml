@@ -57,7 +57,7 @@
       tags:
         - c4_2
 
-    ## Endpoint /stats
+    ## Endpoint /login
     - name: "Try a failed login on the API"
       ansible.builtin.uri:
         url: "https://127.0.0.1/login"
