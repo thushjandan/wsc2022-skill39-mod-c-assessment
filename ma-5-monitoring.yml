@@ -6,12 +6,12 @@
   vars:
     ansible_become_password: "Incheon-2022"
   tasks:
-    ## systemd service applix-api is running
+    ## MariaDB Galera cluster & database
     - name: "Retrieve Galera cluster status"
       shell: 'mysql monitoring -e "SHOW GLOBAL STATUS LIKE \"wsrep_local_state_comment\";"'
       register: mon_cluster_status
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c5_1
 
@@ -26,13 +26,13 @@
       tags:
         - c5_1
 
-    ## systemd service applix-api is running
+    ## All hosts are monitored with ICMP
     - name: "Add drop ICMP iptables rule on LIN4"
       shell: 'iptables -I INPUT 1 -p icmp -j DROP'
       delegate_to: LIN4
       run_once: true
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c5_2
     
@@ -46,7 +46,7 @@
       shell: 'mysql monitoring -e "SELECT * FROM alerts ORDER BY timestamp DESC LIMIT 10;"'
       register: mon_icmp_alerts
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c5_2
 
@@ -55,7 +55,7 @@
       delegate_to: LIN4
       run_once: true
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c5_2
 
@@ -80,7 +80,7 @@
       delegate_to: localhost
       run_once: true
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c5_3
 
@@ -99,11 +99,11 @@
       delegate_to: localhost
       run_once: true
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c5_3
 
-    - name: "Wait max. 2min until an ICMP alerts will be triggered"
+    - name: "Wait max. 2min until an API alerts will be triggered"
       pause:
         minutes: 2
       tags:
@@ -113,7 +113,7 @@
       shell: 'mysql monitoring -e "SELECT * FROM alerts ORDER BY timestamp DESC LIMIT 10;"'
       register: mon_icmp_alerts
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c5_3
 
@@ -124,7 +124,7 @@
       delegate_to: localhost
       run_once: true
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c5_3
 

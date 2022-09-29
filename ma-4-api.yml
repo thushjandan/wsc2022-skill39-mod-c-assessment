@@ -10,7 +10,7 @@
       shell: "systemctl status applix-api"
       register: api_systemd_status
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_1
 
@@ -27,9 +27,13 @@
 
     ## Endpoint /stats
     - name: "Change applix-api process priority"
-      shell: "renice -n -2 -p $(systemctl show --property MainPID --value applix-api)"
+      shell: |-
+        parentpid=$(systemctl show --property MainPID --value applix-api)
+        renice -n -2 -p $parentpid
+        children=$(pgrep -d ' ' -P $parentpid)
+        for i in $children; do renice -n -2 -p $i; done
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       become: true
       tags:
         - c4_2
@@ -42,7 +46,7 @@
         timeout: 120
       register: api_stats
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_2
 
@@ -71,7 +75,7 @@
         status_code: [403, 401]
       register: api_failed_login
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_3
 
@@ -87,7 +91,7 @@
         timeout: 120
       register: api_success_login
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_3
 
@@ -109,7 +113,7 @@
         - c4_3
 
     ## Fail2ban
-    - name: "Send 4x invalid password to /login"
+    - name: "Send 4x invalid password to /login to trigger fail2ban"
       ansible.builtin.uri:
         url: "https://10.22.0.50/login"
         method: POST
@@ -119,9 +123,9 @@
         url_username: "isabella"
         url_password: "invalid"
         timeout: 30
-        status_code: [403, 401]
+        status_code: [200, 403, 401]
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       loop: "{{ range(0,5,1) }}"
       loop_control:
         pause: 1
@@ -131,13 +135,13 @@
     - name: "Unban everything"
       shell: "fail2ban-client unban --all"
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       become: true
       tags:
         - c4_4
 
     - pause:
-        prompt: "Please mark now aspect - Endpoint /login"
+        prompt: "Please mark now aspect - Fail2ban"
       tags:
         - c4_4
 
@@ -154,7 +158,7 @@
         timeout: 120
       register: api_logout_token
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_5
 
@@ -168,7 +172,7 @@
         timeout: 120
       register: api_logout_whoami
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_5
 
@@ -183,7 +187,7 @@
         timeout: 120
       register: api_logout_logout
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_5
 
@@ -198,7 +202,7 @@
         status_code: [403, 401]
       register: api_logout_whoami_invalid
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_5
 
@@ -225,7 +229,7 @@
         timeout: 300
       register: api_net_device_stats
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       retries: 3
       delay: 2
       until: api_net_device_stats is succeeded
@@ -253,7 +257,7 @@
         timeout: 300
       register: api_net_device_stats_filtered
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       retries: 3
       delay: 2
       until: api_net_device_stats_filtered is succeeded
@@ -281,7 +285,7 @@
         timeout: 300
       register: api_net_devices_bgp
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       retries: 3
       delay: 2
       until: api_net_devices_bgp is succeeded
@@ -309,7 +313,7 @@
         timeout: 300
       register: api_net_devices_bgp_filtered
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       retries: 3
       delay: 2
       until: api_net_devices_bgp_filtered is succeeded
@@ -337,7 +341,7 @@
         timeout: 300
       register: api_net_devices_routes
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       retries: 3
       delay: 2
       until: api_net_devices_routes is succeeded
@@ -365,7 +369,7 @@
         timeout: 300
       register: api_net_devices_routes_filtered
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       retries: 3
       delay: 2
       until: api_net_devices_routes_filtered is succeeded
@@ -397,7 +401,7 @@
         timeout: 120
       register: api_loop_token
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_12
         - c4_13
@@ -419,7 +423,7 @@
         timeout: 120
       register: api_loop_put
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       retries: 3
       delay: 2
       until: api_loop_put is succeeded
@@ -466,7 +470,7 @@
         timeout: 120
       register: api_loop_delete
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       retries: 3
       delay: 2
       until: api_loop_delete is succeeded
@@ -513,7 +517,7 @@
         timeout: 900
         status_code: [200, 201]
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_14
 
@@ -521,7 +525,7 @@
       shell: "cat /etc/ansible/customers.json"
       register: customers_json
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_14
 
@@ -529,7 +533,7 @@
       shell: "ps aux | grep ansible-playbook"
       register: ps_ansible_playbook
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_14
 
@@ -542,8 +546,19 @@
       tags:
         - c4_14
 
+    - name: "Waiting max. 20mins until customer deployment has finished"
+      shell: "ps aux | grep 6-customers.yml | grep -v grep || true"
+      register: search_customer_deployment
+      ignore_errors: true
+      changed_when: false
+      delay: 30
+      retries: 40
+      until: "search_customer_deployment.stdout|length == 0"
+      tags:
+        - c4_14
+
     - pause:
-        prompt: "Please mark now aspect - Endpoint PUT /customers/ - Trigger customer deployment"
+        prompt: "Please mark now aspect - Endpoint PUT /customers/ - Trigger customer deployment."
       tags:
         - c4_14
 
@@ -553,24 +568,24 @@
       register: customers_ad
       delegate_to: WIN1
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_15
 
-    - name: "Execute dig on new customer domain"
+    - name: "Execute dig on smartcorp.customers.com domain"
       shell: "dig @10.22.0.101 smartcorp.customers.com +noall +answer"
       register: customers_dig
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_15
 
-    - name: "Call smartcorp.customers.com on WIN1"
+    - name: "Call http://smartcorp.customers.com on WIN1"
       win_shell: "Invoke-WebRequest http://smartcorp.customers.com -UseBasicParsing"
       register: customers_web
       delegate_to: WIN1
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_15
 
@@ -599,7 +614,7 @@
         status_code: [200,500]
       register: api_healthz_1
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_16
 
@@ -610,7 +625,8 @@
         validate_certs: false
         status_code: [404]
       ignore_errors: true
-      changed_when: False
+      changed_when: false
+      loop: "{{ range(0,5,1) }}"
       tags:
         - c4_16
 
@@ -622,7 +638,7 @@
         status_code: [200,500]
       register: api_healthz_2
       ignore_errors: true
-      changed_when: False
+      changed_when: false
       tags:
         - c4_16
 
