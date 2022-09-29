@@ -7,8 +7,6 @@
     - name: "Windows: Hostname"
       debug:
         var: ansible_hostname
-      when: 
-        - "'windows' in group_names"
       tags:
         - c2_1
 
@@ -19,8 +17,6 @@
         fail_msg: "Hostname doesn't match. Configured: {{ ansible_hostname }}. Expected: {{ hostname }}"
         quiet: true
       ignore_errors: true
-      when: 
-        - "'windows' in group_names"
       tags:
         - c2_1
 

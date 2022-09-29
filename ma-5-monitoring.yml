@@ -111,7 +111,7 @@
 
     - name: "Retrieve alerts from database"
       shell: 'mysql monitoring -e "SELECT * FROM alerts ORDER BY timestamp DESC LIMIT 10;"'
-      register: mon_icmp_alerts
+      register: mon_api_alerts
       ignore_errors: true
       changed_when: false
       tags:
@@ -130,7 +130,7 @@
 
     - name: "The API is monitored"
       debug:
-        var: mon_icmp_alerts.stdout
+        var: mon_api_alerts.stdout
       delegate_to: LIN1
       run_once: true
       tags:
