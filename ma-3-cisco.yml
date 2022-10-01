@@ -264,7 +264,7 @@
       tags:
         - c3_9
 
-    - name: "Routing: Reachability of loopback1 of external routers"
+    - name: "Routing: Loopback 1 of external routers is reachable"
       debug:
         msg: "{{ item.commands|first }}. Packet_loss: {{ item.packet_loss }}. Tx/Rx: {{ item.packets_tx }}/{{ item.packets_rx }}"
       when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
@@ -275,7 +275,7 @@
         - c3_9
 
     - pause:
-        prompt: "Please mark now aspect - Routing: Reachability of loopback1 of external routers"
+        prompt: "Please mark now aspect - Routing: Loopback 1 of external routers is reachable"
       tags:
         - c3_9
 

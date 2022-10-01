@@ -80,8 +80,9 @@ ansible-playbook ma-5-monitoring.yml -t c5_1
 * c3_6 - BGP: Loopback 1 is advertised on external routers
 * c3_7 - BGP: Full mesh eBGP peerings with password authentication
 * c3_8 - BGP: Max-path is greater than 1
-* c3_9 - Folder /data/cisco/backup contains config backups
-* c3_10 - Folder /data/cisco/backup is a git repository
+* c3_9 - Routing: Loopback 1 of external routers is reachable
+* c3_10 - Folder /data/cisco/backup contains config backups
+* c3_11 - Folder /data/cisco/backup is a git repository
 
 ### API
 * Reachability https://api.applix.com
