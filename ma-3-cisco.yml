@@ -98,6 +98,17 @@
       tags:
         - c3_4
 
+    - name: "Assert ping to loopback0 interfaces"
+      assert:
+        that: "net_ping_loop0.packets_rx|int >= 1"
+        success_msg: "{{ net_ping_loop0.commands|first }} received more than 1 icmp reply"
+        fail_msg: "{{ net_ping_loop0.commands|first }} failed. Packet_loss: {{ net_ping_loop0.packet_loss }}. Tx/Rx: {{ net_ping_loop0.packets_tx }}/{{ net_ping_loop0.packets_rx }}"
+        quiet: true
+      ignore_errors: true
+      when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
+      tags:
+        - c3_4
+
     - name: "Routing: Reachability of internal & edge loopback interfaces"
       debug:
         msg: "{{ net_ping_loop0.commands|first }} from RTR4. Packet_loss: {{ net_ping_loop0.packet_loss }}. Tx/Rx: {{ net_ping_loop0.packets_tx }}/{{ net_ping_loop0.packets_rx }}"
@@ -224,6 +235,50 @@
       tags:
         - c3_8
 
+    ## Routing: Reachability of loopback1 of external routers
+    - name: "Execute ping from internal and edge to external routers"
+      ios_ping:
+        dest: "{{ item }}"
+      register: net_ping_external_loop1
+      ignore_errors: true
+      changed_when: false
+      when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
+      loop:
+        - "8.8.8.8"
+        - "1.1.1.1"
+        - "99.99.99.99"
+      tags:
+        - c3_9
+
+    - name: Assert ping to external routers
+      assert:
+        that: "item.packets_rx|int >= 1"
+        success_msg: "{{ item.item }} is reachable"
+        fail_msg: "{{ item.item }} is not reachable. Packet_loss: {{ item.packet_loss }}. Tx/Rx: {{ item.packets_tx }}/{{ item.packets_rx }}"
+        quiet: true
+      ignore_errors: true
+      loop: "{{ net_ping_external_loop1.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
+      tags:
+        - c3_9
+
+    - name: "Routing: Reachability of loopback1 of external routers"
+      debug:
+        msg: "{{ item.commands|first }}. Packet_loss: {{ item.packet_loss }}. Tx/Rx: {{ item.packets_tx }}/{{ item.packets_rx }}"
+      when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
+      loop: "{{ net_ping_external_loop1.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      tags:
+        - c3_9
+
+    - pause:
+        prompt: "Please mark now aspect - Routing: Reachability of loopback1 of external routers"
+      tags:
+        - c3_9
+
     ## Folder /data/cisco/backup contains config backups
     - name: "Remove all existing cisco backups"
       shell:
@@ -236,13 +291,13 @@
       run_once: true
       delegate_to: localhost
       tags:
-        - c3_9
+        - c3_10
 
 - name: Run backup playbook of competitor
   ansible.builtin.import_playbook: /data/ansible/cisco/8-backup.yml
   any_errors_fatal: false
   tags:
-    - c3_9
+    - c3_10
 
 - name: MARKING - Network Part 2
   hosts: localhost
@@ -254,7 +309,7 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c3_9
+        - c3_10
 
     - name: "Print few lines of each backup file"
       shell: "head -n 15 /data/cisco/backup/*.cfg"
@@ -262,40 +317,41 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c3_9
+        - c3_10
 
     - name: "Folder /data/cisco/backup contains config backups - list directory"
       debug:
         var: "net_backup_ls.stdout"
       tags:
-        - c3_9
+        - c3_10
 
     - name: "Folder /data/cisco/backup contains config backups - print content of each backup file"
       debug:
         var: "net_backup_head.stdout"
       tags:
-        - c3_9
+        - c3_10
 
     - pause:
         prompt: "Please mark now aspect - Folder /data/cisco/backup contains config backups"
       tags:
-        - c3_9
+        - c3_10
 
+    # Folder /data/cisco/backup is a git repository
     - name: "Retrieve git log"
       shell: "git --git-dir /data/cisco/backup/.git log"
       register: net_git_log
       ignore_errors: true
       changed_when: false
       tags:
-        - c3_10
+        - c3_11
 
     - name: "Folder /data/cisco/backup is a git repository"
       debug:
         var: "net_git_log.stdout"
       tags:
-        - c3_10
+        - c3_11
 
     - pause:
         prompt: "Please mark now aspect - Folder /data/cisco/backup is a git repository"
       tags:
-        - c3_10
+        - c3_11
