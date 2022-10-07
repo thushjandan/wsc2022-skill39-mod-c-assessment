@@ -170,7 +170,7 @@
       tags:
         - c1_6
 
-    - name: "DNS: A records in zone applix.com"
+    - name: "Assert if A records in zone applix.com are correct"
       assert:
         that: "{{ item.stdout.split('\t')|last == hostvars[item.item]['ansible_host'] }}"
         success_msg: "A record for {{ hostvars[item.item]['hostname'] }}.applix.com is correctly configured"
@@ -185,6 +185,17 @@
       tags:
         - c1_6
 
+    - name: "DNS: A records in zone applix.com"
+      debug:
+        msg: "{{ item.stdout|replace('\t',' ') }}"
+      delegate_to: localhost
+      loop: "{{ dns_a_entries.results }}"
+      loop_control:
+        label: "{{ item.cmd }}"
+      run_once: true
+      tags:
+        - c1_6
+  
     - pause:
         prompt: "Please mark now aspect - A records in zone applix.com"
       tags:
@@ -201,13 +212,21 @@
       tags:
         - c1_7
       
-    - name: "DNS: intranet.applix.com resolves to 10.22.0.51"
+    - name: "Assert if intranet.applix.com resolves to 10.22.0.51"
       assert:
         that: "{{ dns_intranet_a_entry.stdout.split('\t')|last == '10.22.0.51' }}"
         success_msg: "intranet.applix.com resolves correctly to 10.22.0.51"
         fail_msg: "intranet.applix.com doesn't resolve correctly. Currently resolves to: {{ dns_intranet_a_entry.stdout.split('\t')|last }}. Expected: 10.22.0.51"
         quiet: true
       ignore_errors: true
+      delegate_to: localhost
+      run_once: true
+      tags:
+        - c1_7
+
+    - name: "DNS: intranet.applix.com resolves to 10.22.0.51"
+      debug:
+        msg: "{{ dns_intranet_a_entry.stdout|replace('\t',' ') }}"
       delegate_to: localhost
       run_once: true
       tags:
@@ -258,6 +277,17 @@
       tags:
         - c1_8
 
+    - name: "DNS server configured on Linux servers"
+      debug:
+        msg: |-
+          {{ dns_client_primary.cmd }}
+          {{ dns_client_primary.stdout }}
+          
+          {{ dns_client_secondaries.cmd }}
+          {{ dns_client_secondaries.stdout }}
+      tags:
+        - c1_8
+
     - pause:
         prompt: "Please mark now aspect - DNS server configured on Linux servers"
       tags:
@@ -272,7 +302,7 @@
       tags:
         - c1_9
 
-    - name: "DNS: DNS suffix applix.com is configured"
+    - name: "Assert if DNS suffix applix.com is configured"
       assert:
         that:
           - "{{ 'applix.com' in (dns_client_suffix.stdout|lower) }}"
@@ -283,8 +313,16 @@
       tags:
         - c1_9
 
+    - name: "DNS suffix applix.com is configured"
+      debug:
+        msg: |-
+          {{ dns_client_suffix.cmd }}
+          {{ dns_client_suffix.stdout }}
+      tags:
+        - c1_9
+
     - pause:
-        prompt: "Please mark now aspect - DNS server configured on Linux servers"
+        prompt: "Please mark now aspect - DNS suffix applix.com is configured"
       tags:
         - c1_9
     
@@ -302,7 +340,7 @@
         - c1_10
         - c1_11
 
-    - name: "Web: Webserver listens on port defined in the variable webport"
+    - name: "Assert if Webserver listens on port defined in the variable webport"
       assert:
         that:
           - "'Hello from {}!'.format(hostname) in (web_server_listen.content)"
@@ -314,12 +352,20 @@
       tags:
         - c1_10
 
+    - name: "Web: Webserver listens on port defined in the variable webport"
+      debug:
+        msg: |-
+          {{ web_server_listen.content }}
+      when: "inventory_hostname in groups.web"
+      tags:
+        - c1_10
+
     - pause:
         prompt: "Please mark now aspect - Web: Webserver listens on port defined in the variable webport"
       tags:
         - c1_10
 
-    - name: "Web: Textcolor is used"
+    - name: "Assert if Textcolor is used"
       assert:
         that:
           - "webcolor|lower in (web_server_listen.content|lower)"
@@ -327,6 +373,14 @@
         fail_msg: "The webcolor is not set correctly. Expected color {{ webcolor }}! Returned content: {{ web_server_listen.content }}"
         quiet: true
       ignore_errors: true
+      when: "inventory_hostname in groups.web"
+      tags:
+        - c1_11
+
+    - name: "Web: Textcolor is used"
+      debug:
+        msg: |-
+          {{ web_server_listen.content }}
       when: "inventory_hostname in groups.web"
       tags:
         - c1_11
@@ -363,20 +417,12 @@
         - c1_12
 
     ## HA: VRRP master
-    - name: "Get keepalived.data"
-      shell: "kill -USR1 $(cat /var/run/keepalived.pid);cat /tmp/keepalived.data"
+    - name: "Get keepalived.data - needs at least 15 secs"
+      shell: "kill -USR1 $(cat /var/run/keepalived.pid);sleep 15;cat /tmp/keepalived.data"
       register: ha_keepalived_data
       when: "inventory_hostname in groups.ha"
       ignore_errors: true
       changed_when: false
-      tags:
-        - c1_13
-        - c1_14
-        - c1_15
-
-    - name: "Wait 10sec before continuing to make sure keepalived dumps state."
-      pause:
-        seconds: 10
       tags:
         - c1_13
         - c1_14
@@ -424,7 +470,7 @@
         that:
           - "'10.22.0.51/24' in ha_keepalived_data.stdout"
         success_msg: "The floating IP is correctly set"
-        fail_msg: "The floating IP is not set correctly. Expected 10.22.0.51/24. Returned content: {{ ha_keepalived_data.stdout | regex_findall('^.*dev\\seth0.*$', multiline=True)}}"
+        fail_msg: "The floating IP is not set correctly. Expected 10.22.0.51/24. Returned content: {{ ha_keepalived_data.stdout | regex_findall('^.*dev\\s(?:eth0|ens).*$', multiline=True)}}"
         quiet: true
       ignore_errors: true
       when: "inventory_hostname in groups.ha"
@@ -433,7 +479,7 @@
 
     - name: "HA: Floating IP is configured"
       debug:
-        msg: "{{ ha_keepalived_data.stdout | regex_findall('^.*dev\\seth0.*$', multiline=True) }}"
+        msg: "{{ ha_keepalived_data.stdout | regex_findall('^.*dev\\s(?:eth0|ens).*$', multiline=True) }}"
       when: "inventory_hostname in groups.ha"
       tags:
         - c1_14
@@ -554,7 +600,7 @@
 
     - name: "Running in 15 secs /data/ansible/linux/7-users.yml to validate if password won't be overwritten"
       pause:
-        seconds: 10
+        seconds: 15
       tags:
         - c1_18
         

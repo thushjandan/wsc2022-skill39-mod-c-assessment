@@ -52,7 +52,8 @@
 
     - name: "Endpoint /stats"
       debug:
-        var: api_stats.content
+        msg: |-
+          {{ api_stats.content | from_json | to_nice_json }}
       tags:
         - c4_2
 
@@ -103,7 +104,7 @@
 
     - name: "Endpoint /login - success login"
       debug:
-        var: api_success_login
+        msg: "{{ api_success_login.content | from_json | to_nice_json }}"
       tags:
         - c4_3
 
@@ -238,7 +239,7 @@
 
     - name: "Endpoint GET /network/devices/stats"
       debug:
-        var: api_net_device_stats
+        msg: "{{ api_net_device_stats.content | from_json | to_nice_json }}"
       ignore_errors: true
       tags:
         - c4_6
@@ -266,7 +267,7 @@
 
     - name: "Endpoint GET /network/devices/stats - filter by management IP"
       debug:
-        var: api_net_device_stats_filtered
+        msg: "{{ api_net_device_stats_filtered.content | from_json | to_nice_json }}"
       ignore_errors: true
       tags:
         - c4_7
@@ -294,7 +295,7 @@
 
     - name: "Endpoint GET /network/devices/bgp"
       debug:
-        var: api_net_devices_bgp
+        msg: "{{ api_net_devices_bgp.content | from_json | to_nice_json }}"
       ignore_errors: true
       tags:
         - c4_8
@@ -322,7 +323,7 @@
 
     - name: "Endpoint GET /network/devices/bgp – filter by management IP"
       debug:
-        var: api_net_devices_bgp_filtered
+        msg: "{{ api_net_devices_bgp_filtered.content | from_json | to_nice_json }}"
       ignore_errors: true
       tags:
         - c4_9
@@ -350,7 +351,7 @@
 
     - name: "Endpoint GET /network/devices/routes"
       debug:
-        var: api_net_devices_routes
+        msg: "{{ api_net_devices_routes.content | from_json | to_nice_json }}"
       ignore_errors: true
       tags:
         - c4_10
@@ -378,7 +379,7 @@
 
     - name: "Endpoint GET /network/devices/routes – filter by management IP"
       debug:
-        var: api_net_devices_routes_filtered
+        msg: "{{ api_net_devices_routes_filtered.content | from_json | to_nice_json }}"
       ignore_errors: true
       tags:
         - c4_11
@@ -646,9 +647,9 @@
       debug:
         msg: |-
           ===== Before: ====
-          "{{ api_healthz_1.content }}"
+          "{{ api_healthz_1.content  | from_json | to_nice_json }}"}}"
           ===== After =======
-          "{{ api_healthz_2.content }}"
+          "{{ api_healthz_2.content | from_json | to_nice_json }}" }}"
       tags:
         - c4_16
 
