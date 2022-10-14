@@ -3,7 +3,7 @@
   hosts: cisco
   any_errors_fatal: false
   tasks:
-    ## Windows: Hostname
+    ## Network: Hostname
     - name: "Network: Hostname"
       debug:
         var: ansible_net_hostname
@@ -12,11 +12,13 @@
 
     - name: Assert Hostname
       assert:
-        that: "hostname == ansible_net_hostname"
+        that: "cisco_hostname == ansible_net_hostname"
         success_msg: Hostname is correctly configured
-        fail_msg: "Hostname doesn't match. Configured: {{ ansible_net_hostname }}. Expected: {{ hostname }}"
+        fail_msg: "Hostname doesn't match. Configured: {{ ansible_net_hostname }}. Expected: {{ cisco_hostname }}"
         quiet: true
       ignore_errors: true
+      vars:
+        cisco_hostname: "{{ hostname | default(inventory_hostname) }}"
       tags:
         - c3_1
 
@@ -24,6 +26,29 @@
         prompt: "Please mark now aspect - Network: Hostname"
       tags:
         - c3_1
+
+
+    ## Network: Configuration saved
+    - name: "Retrieve startup config"
+      ios_command:
+        commands:
+          - "show start | include hostname"
+      register: net_startup_hostname
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c3_2
+
+    - name: "Network: Configuration saved"
+      debug:
+        var: net_startup_hostname.stdout
+      tags:
+        - c3_2
+
+    - pause:
+        prompt: "Please mark now aspect - Network: Configuration saved"
+      tags:
+        - c3_2
 
     ## Security: Management interface secured by ACL
     - name: "Retrieve ACLs"
@@ -35,18 +60,18 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c3_2
+        - c3_3
 
     - name: "Security: Management interface secured by ACL"
       debug:
         var: net_mgmt_acl.stdout
       tags:
-        - c3_2
+        - c3_3
 
     - pause:
         prompt: "Please mark now aspect - Security: Management interface secured by ACL"
       tags:
-        - c3_2
+        - c3_3
 
     ## Network: Loopback interface configured
     - name: "Retrieve Loopback0 interface"
@@ -57,8 +82,8 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c3_3
         - c3_4
+        - c3_5
       
     - name: Assert Loopback0 interface
       assert:
@@ -73,18 +98,18 @@
         starting_from_one_address: "{{ loop_net | ansible.netcommon.ipaddr(groups.cisco.index(inventory_hostname)|int + 1) | ansible.netcommon.ipaddr('address') | string }}"
         starting_from_one: "{{ starting_from_one_address + '/32' }}"
       tags:
-        - c3_3
+        - c3_4
 
     - name: "Network: Loopback interface configured"
       debug:
         var: net_loopback0.stdout
       tags:
-        - c3_3
+        - c3_4
 
     - pause:
         prompt: "Please mark now aspect - Network: Loopback interface configured"
       tags:
-        - c3_3
+        - c3_4
 
     ## Routing: Reachability of loopback of internal & edge routers
     - name: "Execute ping from RTR4 to loopback0 interfaces"
@@ -96,7 +121,7 @@
       delegate_to: RTR4
       when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
       tags:
-        - c3_4
+        - c3_5
 
     - name: "Assert ping to loopback0 interfaces"
       assert:
@@ -107,19 +132,44 @@
       ignore_errors: true
       when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
       tags:
-        - c3_4
+        - c3_5
 
     - name: "Routing: Reachability of internal & edge loopback interfaces"
       debug:
         msg: "{{ net_ping_loop0.commands|first }} from RTR4. Packet_loss: {{ net_ping_loop0.packet_loss }}. Tx/Rx: {{ net_ping_loop0.packets_tx }}/{{ net_ping_loop0.packets_rx }}"
       when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
       tags:
-        - c3_4
+        - c3_5
 
     - pause:
         prompt: "Please mark now aspect - Routing: Reachability of loopback of internal & edge routers"
       tags:
-        - c3_4
+        - c3_5
+
+    ## IGP Protocol
+    - name: "Retrieve routing config"
+      ios_command:
+        commands: 
+          - "show run | section router"
+          - "show run interface GigabitEthernet2"
+      register: net_config_router
+      ignore_errors: true
+      changed_when: false
+      when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
+      tags:
+        - c3_6
+
+    - name: "IGP Protocol"
+      debug:
+        var: "net_config_router.stdout"
+      when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
+      tags:
+        - c3_6
+
+    - pause:
+        prompt: "Please mark now aspect - IGP Protocol"
+      tags:
+        - c3_6
 
     ## BGP: Loopback 0 is used for iBGP peering
     - name: "Retrieve BGP summary from internal routers"
@@ -131,19 +181,19 @@
       changed_when: false
       when: "(inventory_hostname in groups.internal)"
       tags:
-        - c3_5
+        - c3_7
 
     - name: "BGP: Loopback 0 is used for iBGP peering"
       debug:
         var: "net_ibgp_summary.stdout"
       when: "(inventory_hostname in groups.internal)"
       tags:
-        - c3_5
+        - c3_7
 
     - pause:
         prompt: "Please mark now aspect - BGP: Loopback 0 is used for iBGP peering"
       tags:
-        - c3_5
+        - c3_7
 
     ## BGP: Loopback 1 is advertised on external routers
     - name: "Execute show ip route on RTR7"
@@ -155,7 +205,7 @@
       changed_when: false
       when: "(inventory_hostname == 'RTR7')"
       tags:
-        - c3_6
+        - c3_8
 
     - name: "Execute show ip route on RTR8"
       ios_command:
@@ -166,26 +216,26 @@
       changed_when: false
       when: "(inventory_hostname == 'RTR8')"
       tags:
-        - c3_6
+        - c3_8
 
     - name: "BGP: Loopback 1 is advertised on RTR7"
       debug:
         var: "net_rtr7_loop1.stdout"
       when: "(inventory_hostname == 'RTR7')"
       tags:
-        - c3_6
+        - c3_8
 
     - name: "BGP: Loopback 1 is advertised on RTR8"
       debug:
         var: "net_rtr8_loop1.stdout"
       when: "(inventory_hostname == 'RTR8')"
       tags:
-        - c3_6
+        - c3_8
 
     - pause:
         prompt: "Please mark now aspect - BGP: Loopback 1 is advertised on external routers"
       tags:
-        - c3_6
+        - c3_8
 
     ## BGP: Full mesh eBGP peerings with password authentication
     - name: "Execute show ip bgp neighbor on external routers"
@@ -197,19 +247,19 @@
       changed_when: false
       when: "inventory_hostname in groups.external"
       tags:
-        - c3_7
+        - c3_9
 
     - name: "BGP: Full mesh eBGP peerings with password authentication"
       debug:
         var: "net_bgp_external_peering.stdout"
       when: "inventory_hostname in groups.external"
       tags:
-        - c3_7
+        - c3_9
 
     - pause:
         prompt: "Please mark now aspect - BGP: Full mesh eBGP peerings with password authentication"
       tags:
-        - c3_7
+        - c3_9
 
     ## BGP: Max-path is greater than 1
     - name: "Execute show ip bgp summary and search for multipath"
@@ -221,19 +271,19 @@
       changed_when: false
       when: "(inventory_hostname in groups.external) or (inventory_hostname in groups.edge)"
       tags:
-        - c3_8
+        - c3_10
 
     - name: "BGP: Max-path is greater than 1"
       debug:
         var: "net_bgp_maxpath.stdout"
       when: "(inventory_hostname in groups.external) or (inventory_hostname in groups.edge)"
       tags:
-        - c3_8
+        - c3_10
 
     - pause:
         prompt: "Please mark now aspect - BGP: Max-path is greater than 1"
       tags:
-        - c3_8
+        - c3_10
 
     ## Routing: Reachability of loopback1 of external routers
     - name: "Execute ping from internal and edge to external routers"
@@ -248,7 +298,7 @@
         - "1.1.1.1"
         - "99.99.99.99"
       tags:
-        - c3_9
+        - c3_11
 
     - name: Assert ping to external routers
       assert:
@@ -262,7 +312,7 @@
         label: "{{ item.item }}"
       when: "(inventory_hostname in groups.internal) or (inventory_hostname in groups.edge)"
       tags:
-        - c3_9
+        - c3_11
 
     - name: "Routing: Loopback 1 of external routers is reachable"
       debug:
@@ -272,12 +322,12 @@
       loop_control:
         label: "{{ item.item }}"
       tags:
-        - c3_9
+        - c3_11
 
     - pause:
         prompt: "Please mark now aspect - Routing: Loopback 1 of external routers is reachable"
       tags:
-        - c3_9
+        - c3_11
 
     ## Folder /data/cisco/backup contains config backups
     - name: "Remove all existing cisco backups"
@@ -291,13 +341,13 @@
       run_once: true
       delegate_to: localhost
       tags:
-        - c3_10
+        - c3_12
 
 - name: Run backup playbook of competitor
   ansible.builtin.import_playbook: /data/ansible/cisco/8-backup.yml
   any_errors_fatal: false
   tags:
-    - c3_10
+    - c3_12
 
 - name: MARKING - Network Part 2
   hosts: localhost
@@ -309,7 +359,7 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c3_10
+        - c3_12
 
     - name: "Print few lines of each backup file"
       shell: "head -n 15 /data/cisco/backup/*.cfg"
@@ -317,24 +367,24 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c3_10
+        - c3_12
 
     - name: "Folder /data/cisco/backup contains config backups - list directory"
       debug:
         var: "net_backup_ls.stdout"
       tags:
-        - c3_10
+        - c3_12
 
     - name: "Folder /data/cisco/backup contains config backups - print content of each backup file"
       debug:
         var: "net_backup_head.stdout"
       tags:
-        - c3_10
+        - c3_12
 
     - pause:
         prompt: "Please mark now aspect - Folder /data/cisco/backup contains config backups"
       tags:
-        - c3_10
+        - c3_12
 
     # Folder /data/cisco/backup is a git repository
     - name: "Retrieve git log"
@@ -343,15 +393,15 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c3_11
+        - c3_13
 
     - name: "Folder /data/cisco/backup is a git repository"
       debug:
         var: "net_git_log.stdout"
       tags:
-        - c3_11
+        - c3_13
 
     - pause:
         prompt: "Please mark now aspect - Folder /data/cisco/backup is a git repository"
       tags:
-        - c3_11
+        - c3_13

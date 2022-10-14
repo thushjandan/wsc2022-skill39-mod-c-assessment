@@ -43,23 +43,30 @@ ansible-playbook ma-5-monitoring.yml -t c5_1
 ## Aspects
 ### Linux
 * c1_1 - Linux: Hostname
-* c1_2 - iptables: Packet filtering
-* c1_3 - iptables: Rules persist across reboots
-* c1_4 - DNS: Primary/Master DNS server
-* c1_5 - DNS: Secondary/Slave DNS servers
-* c1_6 - DNS: A records in zone applix.com
-* c1_7 - DNS: intranet.applix.com resolves to 10.22.0.51
-* c1_8 - DNS: DNS server configured on Linux servers
-* c1_9 - DNS: DNS suffix applix.com is configured
-* c1_10 - Web: Webserver listen on port defined in the variable webport
-* c1_11 - Web: Textcolor is used
-* c1_12 - Web: http://intranet.applix.com is reachable
-* c1_13 - HA: VRRP master
-* c1_14 - HA: Floating IP is configured
-* c1_15 - HA: Keepalived is secured with password authentication
-* c1_16 - HA: X-HAPROXY-HOST HTTP header (case insensitive)
-* c1_17 - Users: User from CSV file imported
-* c1_18 - Users: Password is not overwritten
+* c1_2 - nftables: Packet filtering
+* c1_3 - nftables: trusted list
+* c1_4 - nftables: Rules persist across reboots
+* c1_5 - DNS: Primary/Master DNS server
+* c1_6 - DNS: Secondary/Slave DNS servers
+* c1_7 - DNS: A records in zone applix.com
+* c1_8 - DNS: intranet.applix.com resolves to 10.22.0.51
+* c1_9 - DNS: DNS server configured on Linux servers
+* c1_10 - DNS: DNS suffix applix.com is configured
+* c1_11 - Web: Webserver listen on port defined in the variable webport
+* c1_12 - Web: Textcolor is used
+* c1_13 - Web: http://intranet.applix.com is reachable
+* c1_14 - HA: VRRP master
+* c1_15 - HA: Floating IP is configured
+* c1_16 - HA: Keepalived is secured with password authentication
+* c1_17 - HA: X-HAPROXY-HOST HTTP header (case insensitive)
+* c1_18 - Users: User from CSV file imported
+* c1_19 - Users: Password is not overwritten
+* c1_20 - File Share: lvm volume created with defined name and size
+* c1_21 - File Share: logical volume mounted to /nfs/{sharename}
+* c1_22 - File Share: share only accessible from HOST VM
+* c1_23 - DNS backup: systemd service exists
+* c1_24 - DNS backup: systemd timer configured
+* c1_25 - DNS backup: backup exists
 
 ### Windows
 * c2_1 - Windows: Hostname
@@ -73,37 +80,26 @@ ansible-playbook ma-5-monitoring.yml -t c5_1
 
 ### Network
 * c3_1 - Network: Hostname
-* c3_2 - Security: Management interface secured by ACL
-* c3_3 - Network: Loopback interface configured
-* c3_4 - Routing: Reachability of loopback of internal & edge routers
-* c3_5 - BGP: Loopback 0 is used for iBGP peering
-* c3_6 - BGP: Loopback 1 is advertised on external routers
-* c3_7 - BGP: Full mesh eBGP peerings with password authentication
-* c3_8 - BGP: Max-path is greater than 1
-* c3_9 - Routing: Loopback 1 of external routers is reachable
-* c3_10 - Folder /data/cisco/backup contains config backups
-* c3_11 - Folder /data/cisco/backup is a git repository
+* c3_2 - Network: Configuration saved
+* c3_3 - Security: Management interface secured by ACL
+* c3_4 - Network: Loopback interface configured
+* c3_5 - Routing: Reachability of loopback of internal & edge routers
+* c3_6 - IGP Protocol
+* c3_7 - BGP: Loopback 0 is used for iBGP peering
+* c3_8 - BGP: Loopback 1 is advertised on external routers
+* c3_9 - BGP: Full mesh eBGP peerings with password authentication
+* c3_10 - BGP: Max-path is greater than 1
+* c3_11 - Routing: Loopback 1 of external routers is reachable
+* c3_12 - Folder /data/cisco/backup contains config backups
+* c3_13 - Folder /data/cisco/backup is a git repository
 
 ### API
 * Reachability https://api.applix.com
 * c4_1 - systemd service applix-api is running
-* c4_2 - Endpoint /stats
-* c4_3 - Endpoint /login
-* c4_4 - Fail2ban
-* c4_5 - Endpoint /logout
-* c4_6 - Endpoint GET /network/devices/stats
-* c4_7 - Endpoint GET /network/devices/stats - filter by management IP
-* c4_8 - Endpoint GET /network/devices/bgp
-* c4_9 - Endpoint GET /network/devices/bgp – filter by management IP
-* c4_10 - Endpoint GET /network/devices/routes
-* c4_11 - Endpoint GET /network/devices/routes – filter by management IP
-* c4_12 - Endpoint PUT /network/loopback
-* c4_13 - Endpoint DELETE /network/loopback
-* c4_14 - Endpoint PUT /customers/ - Trigger customer deployment
-* c4_15 - Endpoint PUT /customers/ - New customer onboarded
-* c4_16 - Endpoint /healthz
-
-### Monitoring
-* c5_1 - MariaDB Galera cluster & database
-* c5_2 - All hosts are monitored with ICMP
-* c5_3 - The API is monitored
+* c4_2 - Endpoint GET /network/devices/stats
+* c4_3 - Endpoint GET /network/devices/stats - filter by management IP
+* c4_4 - Endpoint PUT /customers/ - Trigger customer deployment
+* c4_4_test - Endpoint PUT /customers/ - Print the customers.json file. Can be used in case the previous test fails.
+* c4_5 - Endpoint PUT /customers/ - Ansible playbook started
+* c4_6 - Endpoint PUT /customers/ - DNS records and OU exists
+* c4_7 - Endpoint PUT /customers/ - Website

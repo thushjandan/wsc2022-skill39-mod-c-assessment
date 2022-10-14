@@ -29,9 +29,9 @@
       tags:
         - c1_1
 
-    ## iptables: Packet filtering
+    ## nftables: Packet filtering
     - name: "Get iptables rules"
-      shell: "iptables -L -n -v ; printf ' \n \n \n'"
+      shell: "nft list ruleset ; printf ' \n \n \n'"
       ignore_errors: true
       changed_when: false
       register: out_packet_filtering
@@ -40,7 +40,7 @@
       tags:
         - c1_2
 
-    - name: "iptables: Packet filtering"
+    - name: "nftables: Packet filtering"
       debug:
         var: out_packet_filtering.stdout
       when: 
@@ -49,38 +49,77 @@
         - c1_2
 
     - pause:
-        prompt: "Please mark now aspect - iptables: Packet filtering"
+        prompt: "Please mark now aspect - nftables: Packet filtering"
       tags:
         - c1_2
 
-    # iptables: Rules persist across reboots
-    - name: Reboot LIN4
-      reboot:
-      when: 'inventory_hostname == "LIN4"'
-      changed_when: false
-      tags:
-        - c1_3
-    
-    - name: "Get iptables rules of LIN4"
-      shell: "iptables -L -n -v ; printf ' \n \n \n'"
-      register: out_packet_filtering_lin4
-      when: 'inventory_hostname == "LIN4"'
+    # nftables: trusted list
+    - name: "Get trusted list in nftables"
+      shell: "cat /etc/nftables.conf"
+      register: out_packet_filtering_trusted_list
+      when:
+        - "'linux' in group_names"
       ignore_errors: true
       changed_when: false
       tags:
         - c1_3
 
-    - name: "iptables: Rules persist across reboots"
+    - name: "nftables: trusted list"
       debug:
-        var: out_packet_filtering_lin4.stdout
-      when: 'inventory_hostname == "LIN4"'
+        var: out_packet_filtering_trusted_list.stdout
+      when: 
+        - "'linux' in group_names"
       tags:
         - c1_3
 
     - pause:
-        prompt: "Please mark now aspect - iptables: Rules persist across reboots"
+        prompt: "Please mark now aspect - nftables: trusted list"
       tags:
         - c1_3
+
+    # nftables: Rules persist across reboots
+    - name: Pick random node for rebooting
+      set_fact:
+        nftables_selected_host: "{{ groups.linux | random }}"
+      run_once: true
+      tags:
+        - c1_4
+
+    - debug:
+        msg: "Host {{ nftables_selected_host }} has been chosen to reboot."
+      run_once: true
+      tags:
+        - c1_4
+
+    - name: Reboot a random LIN host
+      reboot:
+        reboot_timeout: 180
+      when: 'inventory_hostname == nftables_selected_host'
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_4
+    
+    - name: "Get nftables rules of LIN4"
+      shell: "nft list ruleset ; printf ' \n \n \n'"
+      register: out_packet_filtering_lin
+      when: 'inventory_hostname == nftables_selected_host'
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_4
+
+    - name: "nftables: Rules persist across reboots"
+      debug:
+        var: out_packet_filtering_lin.stdout
+      when: 'inventory_hostname == nftables_selected_host'
+      tags:
+        - c1_4
+
+    - pause:
+        prompt: "Please mark now aspect - nftables: Rules persist across reboots"
+      tags:
+        - c1_4
     
     ## DNS: Primary/Master DNS server
     - name: "Try zone transfer from primary on all DNS servers"
@@ -92,7 +131,7 @@
       changed_when: false
       ignore_errors: true
       tags:
-        - c1_4
+        - c1_5
 
     - name: "DNS: Primary/Master DNS server"
       debug:
@@ -101,12 +140,12 @@
         - "'dns' in group_names"
         - "inventory_hostname != groups.dns[0]"
       tags:
-        - c1_4
+        - c1_5
 
     - pause:
         prompt: "Please mark now aspect - DNS: Primary/Master DNS server"
       tags:
-        - c1_4
+        - c1_5
 
     ## DNS: Secondary/Slave DNS servers
     - name: "Try zone transfer from secondary"
@@ -118,10 +157,10 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c1_5
+        - c1_6
     
     - name: "Execute dig towards secondary"
-      shell: "dig @{{ hostvars[item]['ansible_host'] }} applix.com SOA +noall +comments"
+      shell: "dig @{{ hostvars[item]['ansible_host'] }} applix.com SOA +noall +comments +timeout=5 +tries=1"
       register: dns_secondary_dig
       loop: "{{ (groups.dns[1:]|list) }}"
       loop_control:
@@ -131,7 +170,7 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c1_5
+        - c1_6
 
     - name: "DNS: Secondary/Slave DNS servers - No zone transfers between slaves allowed"
       debug:
@@ -140,7 +179,7 @@
         - "'dns' in group_names"
         - "inventory_hostname != (groups.dns|last)"
       tags:
-        - c1_5
+        - c1_6
 
     - name: "DNS: Secondary/Slave DNS servers - Slaves answer DNS queries"
       debug:
@@ -151,16 +190,16 @@
         label: "{{ item.cmd }}"
       run_once: true
       tags:
-        - c1_5
+        - c1_6
 
     - pause:
         prompt: "Please mark now aspect - Secondary/Slave DNS servers"
       tags:
-        - c1_5
+        - c1_6
     
     ## DNS: A records in zone applix.com
     - name: "Resolve all DNS entries from hosts file"
-      shell: "dig @10.22.0.2 {{ hostvars[item]['hostname'] }}.applix.com +noall +answer"
+      shell: "dig @10.22.0.2 {{ hostvars[item]['hostname']|default(hostvars[item]['inventory_hostname']) }}.applix.com +noall +answer +timeout=3 +tries=1"
       register: dns_a_entries
       run_once: true
       delegate_to: localhost
@@ -168,13 +207,13 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c1_6
+        - c1_7
 
     - name: "Assert if A records in zone applix.com are correct"
       assert:
         that: "{{ item.stdout.split('\t')|last == hostvars[item.item]['ansible_host'] }}"
-        success_msg: "A record for {{ hostvars[item.item]['hostname'] }}.applix.com is correctly configured"
-        fail_msg: "A record for {{ hostvars[item.item]['hostname'] }}.applix.com doesn't match. Configured: {{ item.stdout.split('\t')|last }}. Expected: {{ hostvars[item.item]['ansible_host'] }}"
+        success_msg: "A record for {{ hostvars[item.item]['hostname']|default(hostvars[item]['inventory_hostname']) }}.applix.com is correctly configured"
+        fail_msg: "A record for {{ hostvars[item.item]['hostname']|default(hostvars[item]['inventory_hostname']) }}.applix.com doesn't match. Configured: {{ item.stdout.split('\t')|last }}. Expected: {{ hostvars[item.item]['ansible_host'] }}"
         quiet: true
       ignore_errors: true
       delegate_to: localhost
@@ -183,7 +222,7 @@
         label: "{{ item.cmd }}"
       run_once: true
       tags:
-        - c1_6
+        - c1_7
 
     - name: "DNS: A records in zone applix.com"
       debug:
@@ -194,23 +233,23 @@
         label: "{{ item.cmd }}"
       run_once: true
       tags:
-        - c1_6
+        - c1_7
   
     - pause:
         prompt: "Please mark now aspect - A records in zone applix.com"
       tags:
-        - c1_6
+        - c1_7
 
     ## DNS: intranet.applix.com resolves to 10.22.0.51
     - name: "Resolve intranet.applix.com"
-      shell: "dig @10.22.0.2 intranet.applix.com +noall +answer"
+      shell: "dig @10.22.0.2 intranet.applix.com +noall +answer +timeout=5 +tries=1"
       register: dns_intranet_a_entry
       run_once: true
       delegate_to: localhost
       ignore_errors: true
       changed_when: false
       tags:
-        - c1_7
+        - c1_8
       
     - name: "Assert if intranet.applix.com resolves to 10.22.0.51"
       assert:
@@ -222,7 +261,7 @@
       delegate_to: localhost
       run_once: true
       tags:
-        - c1_7
+        - c1_8
 
     - name: "DNS: intranet.applix.com resolves to 10.22.0.51"
       debug:
@@ -230,21 +269,21 @@
       delegate_to: localhost
       run_once: true
       tags:
-        - c1_7
+        - c1_8
 
     - pause:
         prompt: "Please mark now aspect - intranet.applix.com resolves to 10.22.0.51"
       tags:
-        - c1_7
+        - c1_8
     
     ## DNS: DNS server configured on Linux servers
     - name: "Check if primary nameserver is configured on linux hosts"
-      shell: "dig applix.com SOA +noall +stats | grep SERVER"
+      shell: "dig applix.com SOA +noall +stats +timeout=5 +tries=1 | grep SERVER"
       register: dns_client_primary
       ignore_errors: true
       changed_when: false
       tags:
-        - c1_8
+        - c1_9
 
     - name: "Check if backup nameserver is configured on linux hosts"
       shell: "cat /etc/resolv.conf | grep nameserver"
@@ -252,7 +291,7 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c1_8
+        - c1_9
 
     - name: "DNS: DNS server configured on Linux servers - Check if primary nameserver is configured"
       assert:
@@ -262,7 +301,7 @@
         quiet: true
       ignore_errors: true
       tags:
-        - c1_8
+        - c1_9
 
     - name: "DNS: DNS server configured on Linux servers - Check if backup nameservers are configured"
       assert:
@@ -275,7 +314,7 @@
         quiet: true
       ignore_errors: true
       tags:
-        - c1_8
+        - c1_9
 
     - name: "DNS server configured on Linux servers"
       debug:
@@ -286,12 +325,12 @@
           {{ dns_client_secondaries.cmd }}
           {{ dns_client_secondaries.stdout }}
       tags:
-        - c1_8
+        - c1_9
 
     - pause:
         prompt: "Please mark now aspect - DNS server configured on Linux servers"
       tags:
-        - c1_8
+        - c1_9
 
     ## DNS: DNS suffix applix.com is configured
     - name: "Check if DNS suffix is configured on linux hosts"
@@ -300,7 +339,7 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c1_9
+        - c1_10
 
     - name: "Assert if DNS suffix applix.com is configured"
       assert:
@@ -311,7 +350,7 @@
         quiet: true
       ignore_errors: true
       tags:
-        - c1_9
+        - c1_10
 
     - name: "DNS suffix applix.com is configured"
       debug:
@@ -319,12 +358,12 @@
           {{ dns_client_suffix.cmd }}
           {{ dns_client_suffix.stdout }}
       tags:
-        - c1_9
+        - c1_10
 
     - pause:
         prompt: "Please mark now aspect - DNS suffix applix.com is configured"
       tags:
-        - c1_9
+        - c1_10
     
     ## Web: Webserver listen on port defined in the variable webport
     - name: "Test if webserver is listening on webport"
@@ -337,8 +376,8 @@
       changed_when: false
       delegate_to: localhost
       tags:
-        - c1_10
         - c1_11
+        - c1_12
 
     - name: "Assert if Webserver listens on port defined in the variable webport"
       assert:
@@ -350,7 +389,7 @@
       ignore_errors: true
       when: "inventory_hostname in groups.web"
       tags:
-        - c1_10
+        - c1_11
 
     - name: "Web: Webserver listens on port defined in the variable webport"
       debug:
@@ -358,12 +397,12 @@
           {{ web_server_listen.content }}
       when: "inventory_hostname in groups.web"
       tags:
-        - c1_10
+        - c1_11
 
     - pause:
         prompt: "Please mark now aspect - Web: Webserver listens on port defined in the variable webport"
       tags:
-        - c1_10
+        - c1_11
 
     - name: "Assert if Textcolor is used"
       assert:
@@ -375,7 +414,7 @@
       ignore_errors: true
       when: "inventory_hostname in groups.web"
       tags:
-        - c1_11
+        - c1_12
 
     - name: "Web: Textcolor is used"
       debug:
@@ -383,12 +422,12 @@
           {{ web_server_listen.content }}
       when: "inventory_hostname in groups.web"
       tags:
-        - c1_11
+        - c1_12
 
     - pause:
         prompt: "Please mark now aspect - Web: Textcolor is used"
       tags:
-        - c1_11
+        - c1_12
     
     ## Web: http://intranet.applix.com is reachable
     - name: "Test if intranet.applix.com is reachable"
@@ -401,20 +440,20 @@
       delegate_to: localhost
       changed_when: false
       tags:
-        - c1_12
-        - c1_16
+        - c1_13
+        - c1_17
 
     - name: "Web: http://intranet.applix.com is reachable"
       debug:
         msg: "{{ web_intranet_listen.content }}"
       when: "inventory_hostname in groups.web"
       tags:
-        - c1_12
+        - c1_13
 
     - pause:
         prompt: "Please mark now aspect - Web: http://intranet.applix.com is reachable"
       tags:
-        - c1_12
+        - c1_13
 
     ## HA: VRRP master
     - name: "Get keepalived.data - needs at least 15 secs"
@@ -424,9 +463,9 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c1_13
         - c1_14
         - c1_15
+        - c1_16
 
     - name: "Test if VRRP state is set correctly on master node"
       assert:
@@ -438,7 +477,7 @@
       ignore_errors: true
       when: "inventory_hostname == groups.ha|last"
       tags:
-        - c1_13
+        - c1_14
 
     - name: "Test if VRRP state is set correctly on backup nodes"
       assert:
@@ -450,19 +489,19 @@
       ignore_errors: true
       when: "inventory_hostname in groups.ha[0:-1]"
       tags:
-        - c1_13
+        - c1_14
 
     - name: "HA: VRRP master"
       debug:
         msg: "{{ ha_keepalived_data.stdout | regex_findall('(^.*Wantstate.*$|^.*Priority.*$)', multiline=True) }}"
       when: "inventory_hostname in groups.ha"
       tags:
-        - c1_13
+        - c1_14
 
     - pause:
         prompt: "Please mark now aspect - HA: VRRP master"
       tags:
-        - c1_13
+        - c1_14
 
     ## HA: Floating IP is configured
     - name: "Test if floating IP is configured"
@@ -475,19 +514,19 @@
       ignore_errors: true
       when: "inventory_hostname in groups.ha"
       tags:
-        - c1_14
+        - c1_15
 
     - name: "HA: Floating IP is configured"
       debug:
         msg: "{{ ha_keepalived_data.stdout | regex_findall('^.*dev\\s(?:eth0|ens).*$', multiline=True) }}"
       when: "inventory_hostname in groups.ha"
       tags:
-        - c1_14
+        - c1_15
 
     - pause:
         prompt: "Please mark now aspect - HA: Floating IP is configured"
       tags:
-        - c1_14
+        - c1_15
 
     ## HA: Keepalived is secured with password authentication
     - name: "Test if password authentication is set"
@@ -500,19 +539,19 @@
       ignore_errors: true
       when: "inventory_hostname in groups.ha"
       tags:
-        - c1_15
+        - c1_16
 
     - name: "HA: Keepalived is secured with password authentication"
       debug:
         msg: "{{ ha_keepalived_data.stdout | regex_findall('^.*Authentication type.*$', multiline=True) }}"
       when: "inventory_hostname in groups.ha"
       tags:
-        - c1_15
+        - c1_16
 
     - pause:
         prompt: "Please mark now aspect - HA: Keepalived is secured with password authentication"
       tags:
-        - c1_15
+        - c1_16
 
     ## HA: X-HAPROXY-HOST HTTP header (case insensitive)
     - name: "Get intranet.applix.com"
@@ -526,7 +565,7 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c1_16
+        - c1_17
 
     - name: "Test if HAPROXY header is set"
       assert:
@@ -540,7 +579,7 @@
       when: "inventory_hostname in groups.web"
       run_once: true
       tags:
-        - c1_16
+        - c1_17
 
     - name: "HA: X-HAPROXY-HOST HTTP header (case insensitive)"
       debug:
@@ -548,12 +587,12 @@
       when: "inventory_hostname in groups.web"
       run_once: True
       tags:
-        - c1_16
+        - c1_17
 
     - pause:
         prompt: "Please mark now aspect - HA: X-HAPROXY-HOST HTTP header (case insensitive)"
       tags:
-        - c1_16
+        - c1_17
 
     ## Users: User from CSV file imported
     - name: "Count user entries"
@@ -563,7 +602,7 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c1_17
+        - c1_18
 
     - name: "Test if amount of users is higher than 50"
       assert:
@@ -575,19 +614,19 @@
       ignore_errors: true
       when: "inventory_hostname in groups.linux"
       tags:
-        - c1_17
+        - c1_18
 
     - name: "Users: Users from CSV file are imported"
       debug:
         msg: "{{ users_imported_count.stdout }}"
       when: "inventory_hostname in groups.linux"
       tags:
-        - c1_17
+        - c1_18
 
     - pause:
         prompt: "Please mark now aspect - Users: Users from CSV file are imported"
       tags:
-        - c1_17
+        - c1_18
 
     # Users: Password is not overwritten
     - name: "Change password of user noah on LIN1"
@@ -596,14 +635,192 @@
       ignore_errors: true
       changed_when: false
       tags:
-        - c1_18
+        - c1_19
 
     - name: "Running in 15 secs /data/ansible/linux/7-users.yml to validate if password won't be overwritten"
       pause:
         seconds: 15
       tags:
-        - c1_18
+        - c1_19
         
 - ansible.builtin.import_playbook: /data/ansible/linux/7-users.yml
   tags:
-    - c1_18
+    - c1_19
+
+- name: MARKING Part 2 - Linux
+  hosts: linux,localhost
+  any_errors_fatal: false
+  tasks:
+    # File Share: lvm volume created with defined name and size
+    - name: "Get all the lvm volumes"
+      shell: "lsblk"
+      when: "inventory_hostname in groups.nfs"
+      register: nfs_lsblk
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_20
+
+    - name: "File Share: lvm volume created with defined name and size"
+      debug:
+        msg: "{{ nfs_lsblk.stdout }}"
+      when: "inventory_hostname in groups.nfs"
+      tags:
+        - c1_20
+
+    - pause:
+        prompt: "Please mark now aspect - File Share: lvm volume created with defined name and size"
+      tags:
+        - c1_20
+
+    # File Share: logical volume mounted to /nfs/{sharename}
+    - name: "Install nfs-common Debian ISO needs to present on HOST VM!!! "
+      apt:
+        name: "nfs-common"
+      when: "inventory_hostname in 'localhost'"
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_21
+
+    - name: "Mount the finance share"
+      shell: "mkdir -p /mnt/finance ; mount -t nfs -o 'soft,timeo=15' {{ hostvars[groups.nfs[0]]['ansible_host'] }}:/nfs/finance /mnt/finance"
+      when: "inventory_hostname in 'localhost'"
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_21
+       
+    - name: "Get all the nfs shares"
+      shell: "mount | grep nfs"
+      when: "inventory_hostname in 'localhost'"
+      register: nfs_mount
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_21
+
+    - name: "File Share: logical volume mounted to /nfs/{sharename}"
+      debug:
+        msg: "{{ nfs_mount.stdout }}"
+      when: "inventory_hostname in 'localhost'"
+      tags:
+        - c1_21
+
+    - pause:
+        prompt: "Please mark now aspect - File Share: logical volume mounted to /nfs/{sharename}"
+      tags:
+        - c1_21
+
+    # File Share: share only accessible from HOST VM
+    - name: "Install nfs-common - Debian ISO needs to present on LIN hosts!!!" 
+      apt:
+        name: "nfs-common"
+      when: "inventory_hostname in groups.linux"
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_22
+
+    - name: "Try to mount NFS from all the LIN hosts"
+      shell: "mkdir -p /mnt/finance ; !(mount -t nfs -o 'soft,timeo=15' {{ hostvars[groups.nfs[0]]['ansible_host'] }}:/nfs/finance /mnt/finance)"
+      when: "inventory_hostname in groups.linux"
+      register: nfs_mount_lin_fail
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_22
+
+    - name: "File Share: share only accessible from HOST VM"
+      debug:
+        msg: |-
+          "{{ nfs_mount_lin_fail.stdout }}
+          {{ nfs_mount_lin_fail.stderr }}"
+      when: "inventory_hostname in groups.linux"
+      tags:
+        - c1_22
+
+    - pause:
+        prompt: "Please mark now aspect - File Share: share only accessible from HOST VM"
+      tags:
+        - c1_22
+
+    # DNS backup: systemd service exists
+    - name: "Retrieve dns backup systemd service status"
+      shell: "systemctl status backup_dns.service"
+      when: "(inventory_hostname in groups.backup) or (inventory_hostname in groups.dns)"
+      register: backup_systemd_service
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_23
+  
+    - name: "DNS backup: systemd service exists"
+      debug:
+        msg: "{{ backup_systemd_service.stdout }}"
+      when: "(inventory_hostname in groups.backup) or (inventory_hostname in groups.dns)"
+      tags:
+        - c1_23
+
+    - pause:
+        prompt: "Please mark now aspect - DNS backup: systemd service exists"
+      tags:
+        - c1_23
+
+    # DNS backup: systemd timer configured
+    - name: "Retrieve dns backup systemd timer status"
+      shell: "systemctl status backup_dns.timer"
+      when: "(inventory_hostname in groups.backup) or (inventory_hostname in groups.dns)"
+      register: backup_systemd_timer
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_24
+
+    - name: "DNS backup: systemd timer configured"
+      debug:
+        msg: "{{ backup_systemd_timer.stdout }}"
+      when: "(inventory_hostname in groups.backup) or (inventory_hostname in groups.dns)"
+      tags:
+        - c1_24
+
+    - pause:
+        prompt: "Please mark now aspect - DNS backup: systemd timer configured"
+      tags:
+        - c1_24
+
+    # DNS backup: backup exists
+    - name: "Trigger DNS backup"
+      shell: "systemctl start backup_dns.service"
+      when: "(inventory_hostname in groups.backup) or (inventory_hostname in groups.dns)"
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_25
+
+    - name: "Wait 30sec until the backup has finished"
+      pause:
+        seconds: 30
+      tags:
+        - c1_25
+
+    - name: "Unzip the latest DNS backup"
+      shell: "mkdir -p /tmp/dns_backup_assess/ ; tar -C /tmp/dns_backup_assess -xzf /backups/$(ls -Art /backups/ | grep 'tar.gz' | tail -n 1) ; ls -lah /tmp/dns_backup_assess/"
+      when: "inventory_hostname in groups.backup"
+      register: backup_files
+      ignore_errors: true
+      changed_when: false
+      tags:
+        - c1_25
+
+    - name: "DNS backup: backup exists"
+      debug:
+        msg: "{{ backup_files.stdout }}"
+      when: "inventory_hostname in groups.backup"
+      tags:
+        - c1_25
+
+    - pause:
+        prompt: "Please mark now aspect - DNS backup: backup exists"
+      tags:
+        - c1_25
