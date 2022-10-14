@@ -54,12 +54,12 @@ all:
         hostname: "APPLIX-ROUTER-003"
       RTR4:
         ansible_host: 10.22.0.204
+        hostname: "APPLIX-ROUTER-004"
       RTR5:
         ansible_host: 10.22.0.205
         hostname: "APPLIX-ROUTER-005"
       RTR6:
         ansible_host: 10.22.0.206
-        hostname: "APPLIX-ROUTER-006"
       RTR7:
         ansible_host: 10.22.0.207
         hostname: "APPLIX-ROUTER-007"
@@ -71,24 +71,24 @@ all:
       children:
         web:
           hosts:
+            LIN5:
             LIN2:
-            LIN3:
           vars:
-            webport: "5645"
+            webport: "6851"
         ha:
           hosts:
-            LIN1:
-            LIN4:
-            LIN2:
-        dns:
-          hosts:
-            LIN5:
             LIN3:
             LIN1:
+            LIN4:
+        dns:
+          hosts:
+            LIN3:
+            LIN4:
             LIN2:
+            LIN5:
         backup:
           hosts:
-            LIN4:
+            LIN1:
         nfs:
           vars:
             shares:

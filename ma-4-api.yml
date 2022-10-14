@@ -175,7 +175,7 @@
         - c4_6
 
     - name: "Execute dig on smartcorp.customers.com domain"
-      shell: "dig @10.22.0.101 smartcorp.customers.com +noall +answer +timeout=2 +tries=1"
+      shell: "dig @{{ hostvars[groups.dc|first]['ansible_host'] }} smartcorp.customers.com +noall +answer +timeout=2 +tries=1"
       register: customers_dig
       ignore_errors: true
       changed_when: false
