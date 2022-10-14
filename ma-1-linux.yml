@@ -123,7 +123,7 @@
     
     ## DNS: Primary/Master DNS server
     - name: "Try zone transfer from primary on all DNS servers"
-      shell: "dig @10.22.0.2 applix.com AXFR +noall +comments +timeout=2 +tries=1"
+      shell: "dig @{{ hostvars[groups.dns|first]['ansible_host'] }} applix.com AXFR +noall +comments +timeout=2 +tries=1"
       register: dns_primary_transfer
       when: 
         - "'dns' in group_names"
@@ -149,7 +149,7 @@
 
     ## DNS: Secondary/Slave DNS servers
     - name: "Try zone transfer from secondary"
-      shell: "! dig @10.22.0.5 applix.com AXFR +timeout=2 +tries=1"
+      shell: "! dig @{{ hostvars[groups.dns|last]['ansible_host'] }} applix.com AXFR +timeout=2 +tries=1"
       register: dns_secondary_transfer
       when: 
         - "'dns' in group_names"
@@ -199,7 +199,7 @@
     
     ## DNS: A records in zone applix.com
     - name: "Resolve all DNS entries from hosts file"
-      shell: "dig @10.22.0.2 {{ hostvars[item]['hostname']|default(hostvars[item]['inventory_hostname']) }}.applix.com +noall +answer +timeout=3 +tries=1"
+      shell: "dig @{{ hostvars[groups.dns|first]['ansible_host'] }} {{ hostvars[item]['hostname']|default(hostvars[item]['inventory_hostname']) }}.applix.com +noall +answer +timeout=3 +tries=1"
       register: dns_a_entries
       run_once: true
       delegate_to: localhost
@@ -242,7 +242,7 @@
 
     ## DNS: intranet.applix.com resolves to 10.22.0.51
     - name: "Resolve intranet.applix.com"
-      shell: "dig @10.22.0.2 intranet.applix.com +noall +answer +timeout=5 +tries=1"
+      shell: "dig @{{ hostvars[groups.dns|first]['ansible_host'] }} intranet.applix.com +noall +answer +timeout=5 +tries=1"
       register: dns_intranet_a_entry
       run_once: true
       delegate_to: localhost
@@ -295,9 +295,9 @@
 
     - name: "DNS: DNS server configured on Linux servers - Check if primary nameserver is configured"
       assert:
-        that: "{{ '10.22.0.2' in dns_client_primary.stdout }}"
-        success_msg: "10.22.0.2 is correctly configured as primary nameserver"
-        fail_msg: "10.22.0.2 is not the primary server for {{ inventory_hostname }}. Configured: {{ dns_client_primary.stdout.split('#')|first }}. Expected: 10.22.0.2"
+        that: "{{ hostvars[groups.dns|first]['ansible_host'] in dns_client_primary.stdout }}"
+        success_msg: "{{ hostvars[groups.dns|first]['ansible_host'] }} is correctly configured as primary nameserver"
+        fail_msg: "{{ hostvars[groups.dns|first]['ansible_host'] }} is not the primary server for {{ inventory_hostname }}. Configured: {{ dns_client_primary.stdout.split('#')|first }}. Expected: {{ hostvars[groups.dns|first]['ansible_host'] }}"
         quiet: true
       ignore_errors: true
       tags:
@@ -306,13 +306,12 @@
     - name: "DNS: DNS server configured on Linux servers - Check if backup nameservers are configured"
       assert:
         that:
-          - "{{ '10.22.0.3' in dns_client_secondaries.stdout }}"
-          - "{{ '10.22.0.4' in dns_client_secondaries.stdout }}"
-          - "{{ '10.22.0.5' in dns_client_secondaries.stdout }}"
-        success_msg: "10.22.0.3, 10.22.0.4 & 10.22.0.5 are correctly configured as backup nameserver"
-        fail_msg: "Not all backup nameserver are configured for {{ inventory_hostname }}. Configured:\n{{ dns_client_secondaries.stdout }}\nExpected: 10.22.0.3, 10.22.0.4 & 10.22.0.5"
+          - "{{ hostvars[item]['ansible_host'] in dns_client_secondaries.stdout }}"
+        success_msg: "{{ hostvars[item]['ansible_host'] }} is correctly configured as backup nameserver"
+        fail_msg: "Not all backup nameserver are configured for {{ inventory_hostname }}. Configured:\n{{ dns_client_secondaries.stdout }}\nExpected: IPs of {{ groups.dns|join(', ') }}"
         quiet: true
       ignore_errors: true
+      loop: "{{ (groups.dns[1:]|list) }}"
       tags:
         - c1_9
 
